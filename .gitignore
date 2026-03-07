@@ -193,3 +193,23 @@ static/build/
 
 # data
 data/
+
+# Compiled binaries
+*.exe
+CortexNodus
+
+# Nuitka build artifacts
+launcher.build/
+launcher.dist/
+nuitka-crash-report.xml
+
+# Runtime data
+market_data/
+training_results/
+graph.json
+
+# Distribution
+dist/
+
+# Claude session data
+.claude/

@@ -51,6 +51,8 @@ class SubgraphModule(nn.Module):
                 mod = self.layers[nid]
                 if isinstance(mod, (MergeAdd, MergeConcat, MergeMultiply)):
                     out = mod(node_inputs)
+                elif isinstance(mod, DualInputModule) and len(node_inputs) >= 2:
+                    out = mod(node_inputs[0], node_inputs[1])
                 elif isinstance(mod, nn.Identity):
                     out = node_inputs[0] if node_inputs else None
                 else:
@@ -107,6 +109,10 @@ class MergeMultiply(nn.Module):
             res = res * valid_inputs[i]
         return res
 
+class DualInputModule(nn.Module):
+    """Marker base class for modules that accept exactly two positional inputs."""
+    pass
+
 class GraphModule(nn.Module):
     def __init__(self, layers_map: Dict[str, nn.Module], execution_order: List[int], connections: Dict[str, List[Any]]):
         super().__init__()
@@ -143,6 +149,8 @@ class GraphModule(nn.Module):
             # Check if module expects list of inputs
             if isinstance(mod, (MergeAdd, MergeConcat, MergeMultiply)):
                 out = mod(inputs)
+            elif isinstance(mod, DualInputModule) and len(inputs) >= 2:
+                out = mod(inputs[0], inputs[1])
             else:
                 # Default: take first input
                 out = mod(inputs[0])
@@ -237,15 +245,45 @@ def build_custom_layer(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
     code = props.get("code", "")
     if not code:
         raise ValueError("CustomLayer requires 'code' property with Python code defining the layer.")
-    
+
+    class_name = props.get("class_name", "MyLayer")
+    args_str = props.get("args", "{}")
+
+    # Parse args
+    try:
+        import ast
+        args_dict = ast.literal_eval(args_str) if isinstance(args_str, str) else args_str
+        if not isinstance(args_dict, dict):
+            args_dict = {}
+    except Exception:
+        args_dict = {}
+
     # Execute the code in a controlled environment
     local_vars = {"nn": nn, "torch": torch}
     try:
         exec(code, {"__builtins__": {}}, local_vars)
+
+        # Strategy 1: look for the named class
+        cls = local_vars.get(class_name)
+        if cls is not None and isinstance(cls, type) and issubclass(cls, nn.Module):
+            return cls(**args_dict)
+
+        # Strategy 2: look for a 'layer' variable (backward compat)
         layer = local_vars.get("layer")
-        if not isinstance(layer, nn.Module):
-            raise ValueError("CustomLayer code must define a variable 'layer' that is an nn.Module.")
-        return layer
+        if isinstance(layer, nn.Module):
+            return layer
+
+        # Strategy 3: find any nn.Module subclass defined in the code
+        for v in local_vars.values():
+            if isinstance(v, type) and issubclass(v, nn.Module) and v is not nn.Module:
+                return v(**args_dict)
+
+        raise ValueError(
+            f"CustomLayer code must define a class '{class_name}' (nn.Module subclass) "
+            f"or a variable 'layer' (nn.Module instance)."
+        )
+    except ValueError:
+        raise
     except Exception as e:
         raise ValueError(f"Error executing CustomLayer code: {e}")
 
@@ -282,13 +320,15 @@ def build_instancenorm2d(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
 @register_layer("GroupNorm")
 def build_groupnorm(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
     num_groups = int(props.get("num_groups", 4))
-    # GroupNorm requires num_channels to be divisible by num_groups
+    # Auto-adjust to nearest divisible value
+    while num_groups > 1 and ctx.out_channels % num_groups != 0:
+        num_groups -= 1
     return nn.GroupNorm(num_groups, ctx.out_channels)
 
 @register_layer("LayerNorm")
 def build_layernorm(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
-    if ctx.out_spatial_size > 1:
-        normalized_shape = [ctx.out_channels, ctx.out_spatial_size, ctx.out_spatial_size]
+    if ctx.input_shapes and len(ctx.input_shapes[0]) == 3:
+        normalized_shape = list(ctx.input_shapes[0])  # [C, H, W]
     else:
         normalized_shape = [ctx.out_channels]
     return nn.LayerNorm(normalized_shape)
@@ -333,6 +373,14 @@ def build_alphadropout(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
 
 @register_layer("Flatten")
 def build_flatten(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
+    if ctx.out_spatial_size > 0 and ctx.input_shapes:
+        s = ctx.input_shapes[0]
+        if len(s) == 3:
+            ctx.out_channels = s[0] * s[1] * s[2]
+        # else: keep ctx.out_channels
+    elif ctx.out_spatial_size > 0:
+        ctx.out_channels = ctx.out_channels * ctx.out_spatial_size * ctx.out_spatial_size
+    ctx.out_spatial_size = 0
     return nn.Flatten()
 
 @register_layer("Identity")
@@ -420,11 +468,11 @@ def build_softplus(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
 
 @register_layer("Hardswish")
 def build_hardswish(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
-    return nn.Hardswish(inplace=True)
+    return nn.Hardswish()
 
 @register_layer("Hardsigmoid")
 def build_hardsigmoid(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
-    return nn.Hardsigmoid(inplace=True)
+    return nn.Hardsigmoid()
 
 @register_layer("graph/subgraph")
 def build_subgraph_layer(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
@@ -693,17 +741,23 @@ def build_transformer_decoder_layer(props: Dict[str, Any], ctx: LayerContext) ->
     nhead = int(props.get("nhead", 8))
     dim_feedforward = int(props.get("dim_feedforward", 512))
     dropout = float(props.get("dropout", 0.1))
-    
-    layer = nn.TransformerDecoderLayer(
-        d_model=d_model,
-        nhead=nhead,
-        dim_feedforward=dim_feedforward,
-        dropout=dropout,
-        batch_first=True
-    )
-    
+
+    class TransformerDecoderLayerWrapper(DualInputModule):
+        def __init__(self):
+            super().__init__()
+            self.layer = nn.TransformerDecoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                dropout=dropout,
+                batch_first=True
+            )
+
+        def forward(self, tgt, memory):
+            return self.layer(tgt, memory)
+
     ctx.out_channels = d_model
-    return layer
+    return TransformerDecoderLayerWrapper()
 
 @register_layer("TransformerDecoder")
 def build_transformer_decoder(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
@@ -712,19 +766,24 @@ def build_transformer_decoder(props: Dict[str, Any], ctx: LayerContext) -> nn.Mo
     num_layers = int(props.get("num_layers", 6))
     dim_feedforward = int(props.get("dim_feedforward", 512))
     dropout = float(props.get("dropout", 0.1))
-    
-    decoder_layer = nn.TransformerDecoderLayer(
-        d_model=d_model,
-        nhead=nhead,
-        dim_feedforward=dim_feedforward,
-        dropout=dropout,
-        batch_first=True
-    )
-    
-    layer = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
-    
+
+    class TransformerDecoderWrapper(DualInputModule):
+        def __init__(self):
+            super().__init__()
+            decoder_layer = nn.TransformerDecoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                dropout=dropout,
+                batch_first=True
+            )
+            self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+
+        def forward(self, tgt, memory):
+            return self.decoder(tgt, memory)
+
     ctx.out_channels = d_model
-    return layer
+    return TransformerDecoderWrapper()
 
 @register_layer("MultiheadAttention")
 def build_multihead_attention(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
@@ -749,9 +808,7 @@ def build_multihead_attention(props: Dict[str, Any], ctx: LayerContext) -> nn.Mo
 def build_linear(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
     in_features = ctx.out_channels if ctx.out_channels > 0 else int(props.get("in_features", 128))
     out_features = int(props.get("out_features", ctx.num_classes))
-    # Ensure out_features is at least num_classes (for classification)
-    out_features = max(out_features, ctx.num_classes)
-    
+
     layer = nn.Linear(in_features, out_features)
     
     ctx.out_channels = out_features
@@ -796,7 +853,82 @@ def build_gpt_block(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
     
     ctx.out_channels = d_model
     return GPTBlock(d_model, nhead, dim_feedforward, dropout)
-    
+
+@register_layer("Reshape")
+def build_reshape(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
+    shape_str = str(props.get("shape", "-1"))
+
+    class ReshapeModule(nn.Module):
+        def __init__(self, shape_str):
+            super().__init__()
+            self.shape = tuple(int(s.strip()) for s in shape_str.split(","))
+
+        def forward(self, x):
+            return x.reshape(x.size(0), *self.shape)
+
+    mod = ReshapeModule(shape_str)
+    # Update context: compute output channels from shape
+    parts = [int(s.strip()) for s in shape_str.split(",")]
+    if len(parts) >= 1:
+        ctx.out_channels = parts[0] if parts[0] != -1 else ctx.out_channels
+    if len(parts) == 3:
+        ctx.out_spatial_size = parts[1]
+    else:
+        ctx.out_spatial_size = 0
+    return mod
+
+@register_layer("LSTM")
+def build_lstm(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
+    input_size = ctx.out_channels
+    hidden_size = int(props.get("hidden_size", 128))
+    num_layers = int(props.get("num_layers", 1))
+    bidirectional = bool(props.get("bidirectional", False))
+    dropout = float(props.get("dropout", 0.0))
+
+    class LSTMWrapper(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lstm = nn.LSTM(
+                input_size=input_size, hidden_size=hidden_size,
+                num_layers=num_layers, batch_first=True,
+                bidirectional=bidirectional,
+                dropout=dropout if num_layers > 1 else 0.0
+            )
+
+        def forward(self, x):
+            output, _ = self.lstm(x)
+            return output
+
+    ctx.out_channels = hidden_size * (2 if bidirectional else 1)
+    ctx.out_spatial_size = 0  # LSTM output is 1D (seq, hidden)
+    return LSTMWrapper()
+
+@register_layer("GRU")
+def build_gru(props: Dict[str, Any], ctx: LayerContext) -> nn.Module:
+    input_size = ctx.out_channels
+    hidden_size = int(props.get("hidden_size", 128))
+    num_layers = int(props.get("num_layers", 1))
+    bidirectional = bool(props.get("bidirectional", False))
+    dropout = float(props.get("dropout", 0.0))
+
+    class GRUWrapper(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.gru = nn.GRU(
+                input_size=input_size, hidden_size=hidden_size,
+                num_layers=num_layers, batch_first=True,
+                bidirectional=bidirectional,
+                dropout=dropout if num_layers > 1 else 0.0
+            )
+
+        def forward(self, x):
+            output, _ = self.gru(x)
+            return output
+
+    ctx.out_channels = hidden_size * (2 if bidirectional else 1)
+    ctx.out_spatial_size = 0  # GRU output is 1D (seq, hidden)
+    return GRUWrapper()
+
 
 # --- Graph Parsing (Topological) ---
 
@@ -846,20 +978,21 @@ def parse_graph_to_plan(graph: Dict[str, Any]) -> Dict[str, Any]:
 def _traverse_graph_with_loss(start_node, nodes, links) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     # Build Adjacency List
     adj = {} # id -> [target_id]
-    rev_adj = {} # id -> [source_id]
-    
+    rev_adj = {} # id -> [(target_slot, source_id)]  — slot-ordered
+
     # Initialize
     for nid in nodes:
         adj[nid] = []
         rev_adj[nid] = []
-        
+
     for link in links.values():
         # link: [id, origin_id, origin_slot, target_id, target_slot, type]
         origin = link[1]
         target = link[3]
+        target_slot = link[4] if len(link) > 4 else 0
         if origin in nodes and target in nodes:
             adj[origin].append(target)
-            rev_adj[target].append(origin)
+            rev_adj[target].append((target_slot, origin))
             
     # Find all Loss nodes
     loss_nodes = []
@@ -890,11 +1023,11 @@ def _traverse_graph_with_loss(start_node, nodes, links) -> Tuple[Dict[str, Any],
     reachable_to_loss = set()
     queue = [n["id"] for n in loss_nodes]
     for q in queue: reachable_to_loss.add(q)
-    
+
     idx = 0
     while idx < len(queue):
         curr = queue[idx]; idx += 1
-        for neighbor in rev_adj[curr]:
+        for (_, neighbor) in rev_adj[curr]:  # rev_adj stores (slot, origin) tuples
             if neighbor not in reachable_to_loss:
                 reachable_to_loss.add(neighbor)
                 queue.append(neighbor)
@@ -908,6 +1041,7 @@ def _traverse_graph_with_loss(start_node, nodes, links) -> Tuple[Dict[str, Any],
         for neighbor in adj[nid]:
             if neighbor in valid_nodes:
                 in_degree[neighbor] += 1
+
                 
     sorted_nodes = []
     zero_in = [nid for nid in valid_nodes if in_degree[nid] == 0]
@@ -950,11 +1084,8 @@ def _traverse_graph_with_loss(start_node, nodes, links) -> Tuple[Dict[str, Any],
             **props
         }
         
-        # Inputs
-        # We need to map inputs to source node IDs
-        # Look at rev_adj, but we need to be specific about which input slot?
-        # For now, just list all valid source nodes
-        sources = [src for src in rev_adj[nid] if src in valid_nodes]
+        # Inputs — sort by target_slot so multi-input nodes (Concat) get correct ordering
+        sources = [src for (_, src) in sorted(rev_adj[nid], key=lambda x: x[0]) if src in valid_nodes]
         # Special case: Data node has no sources in this graph context (it IS the source)
         # But in the plan, we might want to mark it?
         # Actually, Data node is just a node.
@@ -1027,11 +1158,10 @@ def build_model_from_plan(plan: Dict[str, Any], in_channels: int, num_classes: i
         t = node_def.get("type")
         
         # Skip Data node and Loss node in layer building
-        if t in ("MNIST", "Fashion-MNIST", "CIFAR-10", "CustomData", "Loss"):
-            # Just propagate shape if needed?
-            # Data node output is already set.
-            # Loss node has no output.
-            if t in ("MNIST", "Fashion-MNIST", "CIFAR-10", "CustomData"):
+        _DATA_NODE_TYPES = ("MNIST", "Fashion-MNIST", "CIFAR-10", "CustomData", "WikiText-2", "WikiText-103", "PennTreebank")
+        if t in _DATA_NODE_TYPES or t == "Loss":
+            # Data node output is already set. Loss node has no output.
+            if t in _DATA_NODE_TYPES:
                 ctx.shapes[nid_str] = ctx.shapes["data"]
             continue
             

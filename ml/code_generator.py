@@ -50,13 +50,14 @@ def gen_conv2d(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
     kernel_size = int(node.get("kernel_size", 3))
     stride = int(node.get("stride", 1))
     padding = int(node.get("padding", kernel_size // 2))
-    
-    definition = f"nn.Conv2d({ctx.in_channels}, {out_channels}, kernel_size={kernel_size}, stride={stride}, padding={padding})"
+    groups = int(node.get("groups", 1))
+
+    definition = f"nn.Conv2d({ctx.in_channels}, {out_channels}, kernel_size={kernel_size}, stride={stride}, padding={padding}, groups={groups})"
     forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]})"
-    
+
     ctx.out_channels = out_channels
     ctx.out_spatial_size = (ctx.spatial_size + 2 * padding - kernel_size) // stride + 1
-    
+
     return definition, forward_expr
 
 @register_layer_gen("ConvTranspose2d")
@@ -163,13 +164,17 @@ def gen_instancenorm2d(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str,
 @register_layer_gen("GroupNorm")
 def gen_groupnorm(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
     num_groups = int(node.get("num_groups", 4))
+    # Auto-adjust to nearest divisible value (consistent with designer.py)
+    while num_groups > 1 and ctx.in_channels % num_groups != 0:
+        num_groups -= 1
     return f"nn.GroupNorm({num_groups}, {ctx.in_channels})", f"self.{ctx.layer_name}({ctx.input_vars[0]})"
 
 @register_layer_gen("LayerNorm")
 def gen_layernorm(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
-    # Check input shape to determine normalized_shape
-    if ctx.spatial_size > 0:
-        norm_shape = f"[{ctx.in_channels}, {ctx.spatial_size}, {ctx.spatial_size}]"
+    # Use input_shapes to determine normalized_shape (consistent with designer.py)
+    if ctx.input_shapes and len(ctx.input_shapes[0]) == 3:
+        c, h, w = ctx.input_shapes[0]
+        norm_shape = f"[{c}, {h}, {w}]"
     else:
         norm_shape = f"[{ctx.in_channels}]"
     return f"nn.LayerNorm({norm_shape})", f"self.{ctx.layer_name}({ctx.input_vars[0]})"
@@ -193,7 +198,13 @@ def gen_alphadropout(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, s
 def gen_flatten(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
     forward_expr = f"{ctx.input_vars[0]}.view({ctx.input_vars[0]}.size(0), -1)"
     flat_size = ctx.in_channels
-    if ctx.spatial_size > 0:
+    if ctx.spatial_size > 0 and ctx.input_shapes:
+        s = ctx.input_shapes[0]
+        if len(s) == 3:
+            flat_size = s[0] * s[1] * s[2]
+        else:
+            flat_size = ctx.in_channels
+    elif ctx.spatial_size > 0:
         flat_size = ctx.in_channels * ctx.spatial_size * ctx.spatial_size
     ctx.out_channels = flat_size
     ctx.out_spatial_size = 0
@@ -205,9 +216,16 @@ def gen_dense(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
     out_features = int(node.get("out_features", ctx.num_classes))
     auto_flatten = bool(node.get("auto_flatten", True))
     needs_flatten = ctx.spatial_size > 0 and auto_flatten
-    
+
     if needs_flatten:
-        in_features = ctx.in_channels * ctx.spatial_size * ctx.spatial_size
+        if ctx.input_shapes:
+            s = ctx.input_shapes[0]
+            if len(s) == 3:
+                in_features = s[0] * s[1] * s[2]
+            else:
+                in_features = ctx.in_channels
+        else:
+            in_features = ctx.in_channels * ctx.spatial_size * ctx.spatial_size
         forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]}.view({ctx.input_vars[0]}.size(0), -1))"
     else:
         in_features = ctx.in_channels
@@ -247,11 +265,13 @@ def gen_concat(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
     dim = int(node.get("dim", 1))
     inputs_str = ", ".join(ctx.input_vars)
     forward_expr = f"torch.cat([{inputs_str}], dim={dim})"
-    
-    if dim == 1:
-        total_channels = sum(s[0] for s in ctx.input_shapes)
-        ctx.out_channels = total_channels
-        # Spatial size remains same (assuming inputs match)
+
+    if dim == 1 and ctx.input_shapes:
+        ctx.out_channels = sum(s[0] for s in ctx.input_shapes if s)
+    elif ctx.input_shapes:
+        # Non dim=1: keep first input's out_channels
+        ctx.out_channels = ctx.input_shapes[0][0] if ctx.input_shapes[0] else ctx.out_channels
+
     return "", forward_expr
 
 @register_layer_gen("Embedding")
@@ -273,6 +293,7 @@ def gen_positional_encoding(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple
     definition = f"self._create_positional_encoding({d_model}, {max_len}, {dropout})"
     forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]})"
     ctx.helpers.add("PositionalEncoding")
+    ctx.out_channels = d_model
     return definition, forward_expr
 
 @register_layer_gen("GPTBlock")
@@ -281,10 +302,11 @@ def gen_gpt_block(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]
     nhead = int(node.get("nhead", 8))
     dim_feedforward = int(node.get("dim_feedforward", 512))
     dropout = float(node.get("dropout", 0.1))
-    
+
     definition = f"self._create_gpt_block({d_model}, {nhead}, {dim_feedforward}, {dropout})"
     forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]})"
     ctx.helpers.add("GPTBlock")
+    ctx.out_channels = d_model
     return definition, forward_expr
 
 @register_layer_gen("MultiheadAttention")
@@ -317,6 +339,7 @@ def gen_transformer_encoder_layer(node: Dict[str, Any], ctx: LayerGenContext) ->
     
     definition = f"nn.TransformerEncoderLayer(d_model={d_model}, nhead={nhead}, dim_feedforward={dim_feedforward}, dropout={dropout}, batch_first=True)"
     forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]})"
+    ctx.out_channels = d_model
     return definition, forward_expr
 
 @register_layer_gen("TransformerEncoder")
@@ -329,6 +352,7 @@ def gen_transformer_encoder(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple
     
     definition = f"nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model={d_model}, nhead={nhead}, dim_feedforward={dim_feedforward}, dropout={dropout}, batch_first=True), num_layers={num_layers})"
     forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]})"
+    ctx.out_channels = d_model
     return definition, forward_expr
 
 @register_layer_gen("TransformerDecoderLayer")
@@ -345,6 +369,7 @@ def gen_transformer_decoder_layer(node: Dict[str, Any], ctx: LayerGenContext) ->
         forward_expr = f"self.{ctx.layer_name}({tgt}, {memory})"
     else:
         forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]}, {ctx.input_vars[0]})"
+    ctx.out_channels = d_model
     return definition, forward_expr
 
 @register_layer_gen("TransformerDecoder")
@@ -354,7 +379,7 @@ def gen_transformer_decoder(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple
     num_layers = int(node.get("num_layers", 6))
     dim_feedforward = int(node.get("dim_feedforward", 512))
     dropout = float(node.get("dropout", 0.1))
-    
+
     definition = f"nn.TransformerDecoder(nn.TransformerDecoderLayer(d_model={d_model}, nhead={nhead}, dim_feedforward={dim_feedforward}, dropout={dropout}, batch_first=True), num_layers={num_layers})"
     if len(ctx.input_vars) > 1:
         tgt = ctx.input_vars[0]
@@ -362,6 +387,7 @@ def gen_transformer_decoder(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple
         forward_expr = f"self.{ctx.layer_name}({tgt}, {memory})"
     else:
         forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]}, {ctx.input_vars[0]})"
+    ctx.out_channels = d_model
     return definition, forward_expr
 
 @register_layer_gen("Identity")
@@ -455,6 +481,52 @@ def gen_custom_layer(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, s
     forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]})"
     return definition, forward_expr
 
+@register_layer_gen("Reshape")
+def gen_reshape(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
+    shape_str = str(node.get("shape", "-1"))
+    parts = [s.strip() for s in shape_str.split(",")]
+    shape_tuple = ", ".join(parts)
+    forward_expr = f"{ctx.input_vars[0]}.reshape({ctx.input_vars[0]}.size(0), {shape_tuple})"
+    # Update context
+    int_parts = [int(s) for s in parts]
+    if len(int_parts) >= 1 and int_parts[0] != -1:
+        ctx.out_channels = int_parts[0]
+    if len(int_parts) == 3:
+        ctx.out_spatial_size = int_parts[1]
+    else:
+        ctx.out_spatial_size = 0
+    return "", forward_expr
+
+@register_layer_gen("LSTM")
+def gen_lstm(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
+    hidden_size = int(node.get("hidden_size", 128))
+    num_layers = int(node.get("num_layers", 1))
+    bidirectional = bool(node.get("bidirectional", False))
+    dropout = float(node.get("dropout", 0.0))
+    drop_val = dropout if num_layers > 1 else 0.0
+
+    definition = f"nn.LSTM(input_size={ctx.in_channels}, hidden_size={hidden_size}, num_layers={num_layers}, batch_first=True, bidirectional={bidirectional}, dropout={drop_val})"
+    forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]})[0]"
+
+    ctx.out_channels = hidden_size * (2 if bidirectional else 1)
+    ctx.out_spatial_size = 0
+    return definition, forward_expr
+
+@register_layer_gen("GRU")
+def gen_gru(node: Dict[str, Any], ctx: LayerGenContext) -> Tuple[str, str]:
+    hidden_size = int(node.get("hidden_size", 128))
+    num_layers = int(node.get("num_layers", 1))
+    bidirectional = bool(node.get("bidirectional", False))
+    dropout = float(node.get("dropout", 0.0))
+    drop_val = dropout if num_layers > 1 else 0.0
+
+    definition = f"nn.GRU(input_size={ctx.in_channels}, hidden_size={hidden_size}, num_layers={num_layers}, batch_first=True, bidirectional={bidirectional}, dropout={drop_val})"
+    forward_expr = f"self.{ctx.layer_name}({ctx.input_vars[0]})[0]"
+
+    ctx.out_channels = hidden_size * (2 if bidirectional else 1)
+    ctx.out_spatial_size = 0
+    return definition, forward_expr
+
 # --- Main Generation Logic ---
 
 def generate_pytorch_script(plan: Dict[str, Any]) -> str:
@@ -505,15 +577,28 @@ def generate_pytorch_script(plan: Dict[str, Any]) -> str:
     
     # Generate Model Class (and recursively subgraphs)
     # Initial shape for Model
+    NLP_DATASETS = ["WikiText-2", "WikiText-103", "PennTreebank"]
     if dataset_name == "CIFAR-10":
         initial_shape = (3, 32, 32)
     elif dataset_name in ["MNIST", "Fashion-MNIST"]:
         initial_shape = (1, 28, 28)
-    elif dataset_name == "WikiText-2":
-        initial_shape = (1,) 
+    elif dataset_name in NLP_DATASETS:
+        initial_shape = (1,)
+    elif dataset_name == "CustomData":
+        try:
+            # Find the CustomData node and parse its input_shape prop
+            custom_node = next(
+                (n for n in nodes.values() if n.get("type") == "CustomData"), None
+            )
+            shape_str = custom_node.get("input_shape", "3,128,128") if custom_node else "3,128,128"
+            initial_shape = tuple(int(x) for x in shape_str.split(","))
+        except Exception:
+            initial_shape = (3, 128, 128)
     else:
         initial_shape = (1, 28, 28)
-        
+
+    num_classes = 100 if dataset_name in NLP_DATASETS else 10
+
     model_class_code, needed_helpers = _generate_module_class(
         class_name="Model",
         nodes=nodes,
@@ -524,7 +609,7 @@ def generate_pytorch_script(plan: Dict[str, Any]) -> str:
         input_shapes=[initial_shape],
         subgraph_registry=subgraph_registry,
         subgraph_cache=subgraph_cache,
-        num_classes=100 if dataset_name == "WikiText-2" else 10, # Approximate
+        num_classes=num_classes,
         is_main_model=True
     )
     
@@ -588,15 +673,23 @@ def generate_inference_script(plan: Dict[str, Any]) -> str:
     imports += "\nimport argparse\nimport os\nfrom PIL import Image\ntry:\n    import gradio as gr\nexcept ImportError:\n    print('Please install gradio: pip install gradio')"
     
     # Initial shape
+    NLP_DATASETS_INF = ["WikiText-2", "WikiText-103", "PennTreebank"]
     if dataset_name == "CIFAR-10":
         initial_shape = (3, 32, 32)
     elif dataset_name in ["MNIST", "Fashion-MNIST"]:
         initial_shape = (1, 28, 28)
-    elif dataset_name == "WikiText-2":
-        initial_shape = (1,) 
+    elif dataset_name in NLP_DATASETS_INF:
+        initial_shape = (1,)
+    elif dataset_name == "CustomData":
+        try:
+            custom_node = next((n for n in nodes.values() if n.get("type") == "CustomData"), None)
+            shape_str = custom_node.get("input_shape", "3,128,128") if custom_node else "3,128,128"
+            initial_shape = tuple(int(x) for x in shape_str.split(","))
+        except Exception:
+            initial_shape = (3, 128, 128)
     else:
         initial_shape = (1, 28, 28)
-        
+
     model_class_code, needed_helpers = _generate_module_class(
         class_name="Model",
         nodes=nodes,
@@ -607,7 +700,7 @@ def generate_inference_script(plan: Dict[str, Any]) -> str:
         input_shapes=[initial_shape],
         subgraph_registry=subgraph_registry,
         subgraph_cache=subgraph_cache,
-        num_classes=100 if dataset_name == "WikiText-2" else 10,
+        num_classes=100 if dataset_name in NLP_DATASETS_INF else 10,
         is_main_model=True
     )
     
@@ -831,7 +924,7 @@ def _generate_module_class(class_name: str, nodes: Dict[str, Any], execution_ord
         node_type = node.get("type", "")
         
         # Skip Data/Loss/Input/Output nodes in layer generation
-        if node_type in ["MNIST", "Fashion-MNIST", "CIFAR-10", "Loss", "CustomData", "WikiText-2", "graph/input", "graph/output"]:
+        if node_type in ["MNIST", "Fashion-MNIST", "CIFAR-10", "Loss", "CustomData", "WikiText-2", "WikiText-103", "PennTreebank", "graph/input", "graph/output"]:
             if node_type == "graph/output":
                 source_ids = connections.get(node_id_str, [])
                 if source_ids:
@@ -1186,15 +1279,15 @@ def _generate_dataset_code(dataset_name: str, batch_size: int) -> str:
     
     return train_loader, test_loader"""
     
-    elif dataset_name == "WikiText-2":
+    elif dataset_name in ["WikiText-2", "WikiText-103", "PennTreebank"]:
         code = f"""def get_dataloaders():
-    # Placeholder for WikiText-2
-    print("WikiText-2 dataset loading is a placeholder in this generated script.")
-    
-    # Dummy data for demonstration
+    # Placeholder for {dataset_name}
+    print("{dataset_name} dataset loading is a placeholder in this generated script.")
+
+    # Dummy data for demonstration (token sequences)
     train_loader = [(torch.randint(0, 100, ({batch_size}, 32)), torch.randint(0, 100, ({batch_size}, 32))) for _ in range(10)]
     test_loader = [(torch.randint(0, 100, ({batch_size}, 32)), torch.randint(0, 100, ({batch_size}, 32))) for _ in range(2)]
-    
+
     return train_loader, test_loader"""
     
     else:

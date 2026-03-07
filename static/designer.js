@@ -1,6 +1,7 @@
 // 简易 LiteGraph 集成与属性面板、保存/加载、运行
 const graph = new LGraph();
 const canvas = new LGraphCanvas("#graphcanvas", graph);
+canvas.show_info = false;  // 关闭右下角类型信息面板
 const graphStack = []; // Stack of {graph: LGraph, node: SubgraphNode}
 
 // SocketIO for real-time logging
@@ -803,9 +804,9 @@ const NODE_DEFINITIONS = [
   { type: "CustomData", title: "Custom Data", props: { batch_size: 32, path: "", type: "ImageFolder", input_shape: "3,128,128" }, out: ["data"] },
   
   // Layers - Conv
-  { type: "Conv2D", title: "Conv2D", props: { out_channels: 8, kernel_size: 3 }, in: ["in"], out: ["out"] },
-  { type: "MaxPool", title: "MaxPool", props: { kernel_size: 2 }, in: ["in"], out: ["out"] },
-  { type: "AvgPool", title: "AvgPool", props: { kernel_size: 2 }, in: ["in"], out: ["out"] },
+  { type: "Conv2D", title: "Conv2D", props: { out_channels: 32, kernel_size: 3, stride: 1, padding: 1, groups: 1 }, in: ["in"], out: ["out"] },
+  { type: "MaxPool", title: "MaxPool", props: { kernel_size: 2, stride: 2, padding: 0 }, in: ["in"], out: ["out"] },
+  { type: "AvgPool", title: "AvgPool", props: { kernel_size: 2, stride: 2, padding: 0 }, in: ["in"], out: ["out"] },
   { type: "AdaptiveAvgPool", title: "AdaptiveAvgPool", props: { output_size: 1 }, in: ["in"], out: ["out"] },
   { type: "ConvTranspose2d", title: "ConvTranspose2d", props: { out_channels: 8, kernel_size: 3, stride: 1, padding: 0, output_padding: 0 }, in: ["in"], out: ["out"] },
   { type: "Upsample", title: "Upsample", props: { scale_factor: 2, mode: "nearest" }, in: ["in"], out: ["out"] },
@@ -832,7 +833,7 @@ const NODE_DEFINITIONS = [
   { type: "BatchNorm2d", title: "BatchNorm2d", props: {}, in: ["in"], out: ["out"] },
   { type: "Dropout", title: "Dropout", props: { p: 0.5 }, in: ["in"], out: ["out"] },
   { type: "Flatten", title: "Flatten", props: {}, in: ["in"], out: ["out"] },
-  { type: "Dense", title: "Dense", props: { out_features: 10 }, in: ["in"], out: ["out"] },
+  { type: "Dense", title: "Dense", props: { out_features: 10, auto_flatten: true }, in: ["in"], out: ["out"] },
   { type: "Identity", title: "Identity", props: {}, in: ["in"], out: ["out"] },
   { type: "Add", title: "Add", props: {}, in: ["in1", "in2"], out: ["out"] },
   { type: "Multiply", title: "Multiply", props: {}, in: ["in1", "in2"], out: ["out"] },
@@ -856,12 +857,17 @@ const NODE_DEFINITIONS = [
   { type: "PositionalEncoding", title: "Positional Encoding", props: { max_len: 512, d_model: 128, dropout: 0.1 }, in: ["in"], out: ["out"] },
   { type: "TransformerEncoderLayer", title: "Transformer Encoder Layer", props: { d_model: 128, nhead: 8, dim_feedforward: 512, dropout: 0.1 }, in: ["in"], out: ["out"] },
   { type: "TransformerEncoder", title: "Transformer Encoder", props: { d_model: 128, nhead: 8, num_layers: 6, dim_feedforward: 512, dropout: 0.1 }, in: ["in"], out: ["out"] },
-  { type: "TransformerDecoderLayer", title: "Transformer Decoder Layer", props: { d_model: 128, nhead: 8, dim_feedforward: 512, dropout: 0.1 }, in: ["in"], out: ["out"] },
-  { type: "TransformerDecoder", title: "Transformer Decoder", props: { d_model: 128, nhead: 8, num_layers: 6, dim_feedforward: 512, dropout: 0.1 }, in: ["in"], out: ["out"] },
+  { type: "TransformerDecoderLayer", title: "Transformer Decoder Layer", props: { d_model: 128, nhead: 8, dim_feedforward: 512, dropout: 0.1 }, in: ["tgt", "memory"], out: ["out"] },
+  { type: "TransformerDecoder", title: "Transformer Decoder", props: { d_model: 128, nhead: 8, num_layers: 6, dim_feedforward: 512, dropout: 0.1 }, in: ["tgt", "memory"], out: ["out"] },
   { type: "MultiheadAttention", title: "Multihead Attention", props: { embed_dim: 128, num_heads: 8, dropout: 0.0 }, in: ["in"], out: ["out"] },
   { type: "Linear", title: "Linear", props: { out_features: 10 }, in: ["in"], out: ["out"] },
   { type: "GPTBlock", title: "GPT Block", props: { d_model: 128, nhead: 8, dim_feedforward: 512, dropout: 0.1 }, in: ["in"], out: ["out"] },
-  
+
+  // Recurrent & Reshape
+  { type: "Reshape", title: "Reshape", props: { shape: "-1" }, in: ["in"], out: ["out"] },
+  { type: "LSTM", title: "LSTM", props: { hidden_size: 128, num_layers: 1, bidirectional: false, dropout: 0.0 }, in: ["in"], out: ["out"] },
+  { type: "GRU", title: "GRU", props: { hidden_size: 128, num_layers: 1, bidirectional: false, dropout: 0.0 }, in: ["in"], out: ["out"] },
+
   // Subgraph & Structure
   { type: "graph/input", title: "Graph Input", props: { name: "in", type: "any" }, out: ["out"] },
   { type: "graph/output", title: "Graph Output", props: { name: "out", type: "any" }, in: ["in"] },
@@ -906,12 +912,23 @@ function validateGraph() {
   nodes.forEach(node => {
     if (["MNIST", "Fashion-MNIST", "CIFAR-10", "WikiText-2", "WikiText-103", "PennTreebank", "CustomData"].includes(node.type)) return;
     
-    // Get input shape from first connected link
-    if (!node.inputs || !node.inputs[0] || !node.inputs[0].link) return;
-    const linkId = node.inputs[0].link;
-    const link = graph.links[linkId];
-    if (!link) return;
-    const inShape = shapes[link.origin_id];
+    // Get input shapes from all connected links
+    if (!node.inputs || node.inputs.length === 0) return;
+
+    const MULTI_INPUT_TYPES = ["Add", "Multiply", "Concat"];
+    const inShapes = [];
+    for (let i = 0; i < node.inputs.length; i++) {
+        if (node.inputs[i] && node.inputs[i].link) {
+            const link = graph.links[node.inputs[i].link];
+            if (link && shapes[link.origin_id]) {
+                inShapes.push(shapes[link.origin_id]);
+            }
+        }
+    }
+    if (inShapes.length === 0) return;
+
+    // Single-input nodes get first shape, multi-input nodes get array
+    const inShape = MULTI_INPUT_TYPES.includes(node.type) ? inShapes : inShapes[0];
     
     if (!inShape) return; // Upstream error
 
@@ -1062,6 +1079,87 @@ const ShapeInference = {
     Embedding: function(p, inShape) {
         const dim = parseInt(p.embedding_dim||128);
         return [dim];
+    },
+
+    Reshape: function(p, inShape) {
+        const shapeStr = String(p.shape || "-1");
+        const parts = shapeStr.split(",").map(s => parseInt(s.trim()));
+        // Compute total input elements
+        const totalIn = inShape.reduce((a, b) => a * b, 1);
+        // Replace -1 with computed value
+        const knownProduct = parts.filter(v => v !== -1).reduce((a, b) => a * b, 1);
+        const resolved = parts.map(v => v === -1 ? Math.floor(totalIn / knownProduct) : v);
+        return resolved;
+    },
+
+    LSTM: function(p, inShape) {
+        const hidden = parseInt(p.hidden_size || 128);
+        const bidir = (p.bidirectional === true || p.bidirectional === "true");
+        return [hidden * (bidir ? 2 : 1)];
+    },
+
+    GRU: function(p, inShape) {
+        const hidden = parseInt(p.hidden_size || 128);
+        const bidir = (p.bidirectional === true || p.bidirectional === "true");
+        return [hidden * (bidir ? 2 : 1)];
+    },
+
+    TransformerDecoderLayer: function(p, inShape) {
+        const d_model = parseInt(p.d_model || 128);
+        return [d_model];
+    },
+
+    TransformerDecoder: function(p, inShape) {
+        const d_model = parseInt(p.d_model || 128);
+        return [d_model];
+    },
+
+    TransformerEncoderLayer: function(p, inShape) {
+        const d_model = parseInt(p.d_model || 128);
+        return [d_model];
+    },
+
+    TransformerEncoder: function(p, inShape) {
+        const d_model = parseInt(p.d_model || 128);
+        return [d_model];
+    },
+
+    // Multi-input nodes
+    Concat: function(p, inShapes) {
+        if (!Array.isArray(inShapes) || inShapes.length === 0) return inShapes;
+        const dim = parseInt(p.dim || 1);
+        const base = inShapes[0].slice();
+        const dimIdx = dim - 1; // shape doesn't contain batch dim
+        if (dimIdx >= 0 && dimIdx < base.length) {
+            for (let i = 1; i < inShapes.length; i++) {
+                base[dimIdx] += inShapes[i][dimIdx];
+            }
+        }
+        return base;
+    },
+
+    Add: function(p, inShapes) {
+        if (Array.isArray(inShapes) && inShapes.length > 0) return inShapes[0];
+        return inShapes;
+    },
+
+    Multiply: function(p, inShapes) {
+        if (Array.isArray(inShapes) && inShapes.length > 0) return inShapes[0];
+        return inShapes;
+    },
+
+    MultiheadAttention: function(p, inShape) {
+        return [parseInt(p.embed_dim || 128)];
+    },
+
+    GPTBlock: function(p, inShape) {
+        // d_model = ctx.in_channels in both python paths — output shape = input shape
+        return Array.isArray(inShape) ? inShape.slice() : inShape;
+    },
+
+    PositionalEncoding: function(p, inShape) {
+        // d_model = ctx.in_channels in both python paths — output shape = input shape
+        return Array.isArray(inShape) ? inShape.slice() : inShape;
     }
 };
 
@@ -1497,9 +1595,9 @@ document.getElementById("btn-save").onclick = () => {
 };
 
 document.getElementById("btn-save-as").onclick = () => {
-  const filename = prompt("请输入文件名:", currentFileName || "my_graph.json");
+  let filename = prompt("请输入文件名:", currentFileName || "my_graph.json");
   if (!filename) return;
-  
+
   if (!filename.endsWith('.json')) {
     filename += '.json';
   }
@@ -2347,7 +2445,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTabs();
     setupKeyboardShortcuts();
     fetchSubgraphs();
-    
+
     const btnNewEmbedded = document.getElementById("btn-new-embedded-subgraph");
     if (btnNewEmbedded) {
         btnNewEmbedded.onclick = () => {
@@ -2359,7 +2457,579 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial state
     saveState();
+
+    // Market
+    initMarket();
+
+    // About
+    const aboutModal = document.getElementById('about-modal');
+    document.getElementById('btn-about').addEventListener('click', () => aboutModal.style.display = 'block');
+    document.getElementById('about-modal-close').addEventListener('click', () => aboutModal.style.display = 'none');
+    aboutModal.addEventListener('click', (e) => { if (e.target === aboutModal) aboutModal.style.display = 'none'; });
 });
 
 // Initialize file status
 updateFileStatus();
+
+
+// ═══════════════════════════════════════════════════════════════════
+// MARKETPLACE
+// ═══════════════════════════════════════════════════════════════════
+
+let marketBaseUrl = null;
+let marketCurrentTab = 'subgraphs';
+let marketSearchQuery = '';
+
+async function initMarket() {
+    // Fetch market server URL from app config
+    try {
+        const res = await fetch('/api/market_config');
+        const cfg = await res.json();
+        marketBaseUrl = cfg.url;
+    } catch (e) {
+        marketBaseUrl = 'http://localhost:5100';
+    }
+
+    document.getElementById('btn-market').addEventListener('click', openMarket);
+    document.getElementById('market-modal-close').addEventListener('click', closeMarket);
+    document.getElementById('market-modal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('market-modal')) closeMarket();
+    });
+
+    // Tab switching
+    document.querySelectorAll('.market-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.marketTab;
+            switchMarketTab(tab);
+        });
+    });
+
+    // Search
+    document.getElementById('market-search-btn').addEventListener('click', () => {
+        marketSearchQuery = document.getElementById('market-search-input').value.trim();
+        loadMarketItems(marketCurrentTab);
+    });
+    document.getElementById('market-search-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            marketSearchQuery = document.getElementById('market-search-input').value.trim();
+            loadMarketItems(marketCurrentTab);
+        }
+    });
+    document.getElementById('market-refresh-btn').addEventListener('click', () => {
+        loadMarketItems(marketCurrentTab);
+    });
+
+    // Publish type toggle
+    document.getElementById('publish-type').addEventListener('change', updatePublishTypeUI);
+
+    // Publish submit
+    document.getElementById('publish-submit-btn').addEventListener('click', publishToMarket);
+}
+
+function openMarket() {
+    document.getElementById('market-modal').style.display = 'block';
+    checkMarketStatus();
+    loadMarketItems('subgraphs');
+    loadMarketItems('projects');
+    updatePublishTypeUI();
+    populatePublishSubgraphList();
+}
+
+function closeMarket() {
+    document.getElementById('market-modal').style.display = 'none';
+}
+
+function switchMarketTab(tab) {
+    marketCurrentTab = tab;
+    marketSearchQuery = document.getElementById('market-search-input').value.trim();
+
+    document.querySelectorAll('.market-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.market-tab-btn[data-market-tab="${tab}"]`).classList.add('active');
+
+    document.querySelectorAll('.market-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById(`market-pane-${tab}`).classList.add('active');
+
+    // Hide search bar on publish tab
+    document.getElementById('market-search-bar').style.display = tab === 'publish' ? 'none' : 'flex';
+
+    // Redirect to login if not logged in when clicking publish
+    if (tab === 'publish' && !accountToken) {
+        document.getElementById('publish-feedback').textContent = '';
+        const fb = document.getElementById('publish-feedback');
+        fb.innerHTML = '&#128274; 请先<a href="#" id="publish-login-link" style="color:#9fb1ff;margin:0 4px;">登录</a>后发布';
+        fb.style.color = '#aaa';
+        document.getElementById('publish-login-link').addEventListener('click', (e) => {
+            e.preventDefault();
+            closeMarket();
+            openAccountModal();
+        });
+        document.getElementById('publish-submit-btn').disabled = true;
+    } else {
+        document.getElementById('publish-submit-btn').disabled = false;
+        document.getElementById('publish-feedback').textContent = '';
+    }
+}
+
+async function checkMarketStatus() {
+    const dot = document.getElementById('market-status-dot');
+    const txt = document.getElementById('market-status-text');
+    dot.className = 'market-status-dot';
+    txt.textContent = '连接中...';
+    try {
+        const res = await fetch(`${marketBaseUrl}/api/market/status`, { signal: AbortSignal.timeout(4000) });
+        const data = await res.json();
+        dot.classList.add('online');
+        txt.textContent = `在线 · ${data.subgraphs} 子图 · ${data.projects} 项目`;
+    } catch {
+        dot.classList.add('offline');
+        txt.textContent = '离线 (市场服务器未运行)';
+    }
+}
+
+async function loadMarketItems(type) {
+    const gridId = type === 'subgraphs' ? 'market-subgraph-grid' : 'market-project-grid';
+    const grid = document.getElementById(gridId);
+    grid.innerHTML = '<div class="market-loading">加载中...</div>';
+
+    try {
+        const q = marketSearchQuery ? `?q=${encodeURIComponent(marketSearchQuery)}` : '';
+        const res = await fetch(`${marketBaseUrl}/api/market/${type}${q}`, { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        renderMarketGrid(grid, data.items || [], type);
+    } catch (e) {
+        grid.innerHTML = `<div class="market-loading" style="color:#888;">
+            无法连接到市场服务器。<br>
+            <small>请先运行: <code style="background:#333;padding:2px 6px;border-radius:3px;">python marketplace_server.py</code></small>
+        </div>`;
+    }
+}
+
+function renderMarketGrid(grid, items, type) {
+    if (!items.length) {
+        grid.innerHTML = '<div class="market-loading">暂无内容，快来发布第一个吧！</div>';
+        return;
+    }
+    grid.innerHTML = '';
+    items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'market-card';
+
+        const tags = (item.tags || []).map(t =>
+            `<span class="market-tag">${escapeHtml(t)}</span>`
+        ).join('');
+
+        card.innerHTML = `
+            <div class="market-card-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+            <div class="market-card-desc">${escapeHtml(item.description || '暂无描述')}</div>
+            <div class="market-card-tags">${tags}</div>
+            <div class="market-card-meta">
+                <span>by ${escapeHtml(item.author || 'anonymous')}</span>
+                <span>&#8681; ${item.downloads || 0} &nbsp; ${item.created_at || ''}</span>
+            </div>
+            <div class="market-card-actions">
+                <button class="btn-market-import" data-id="${item.id}" data-type="${type}">
+                    ${type === 'subgraphs' ? '导入子图' : '打开项目'}
+                </button>
+                <button class="btn-market-delete" data-id="${item.id}" data-type="${type}" title="删除">&#128465;</button>
+            </div>
+        `;
+
+        card.querySelector('.btn-market-import').addEventListener('click', () => importMarketItem(item.id, type, item.name));
+        card.querySelector('.btn-market-delete').addEventListener('click', () => deleteMarketItem(item.id, type, item.name, card));
+
+        grid.appendChild(card);
+    });
+}
+
+async function importMarketItem(id, type, name) {
+    try {
+        const res = await fetch(`${marketBaseUrl}/api/market/${type}/${id}`);
+        if (!res.ok) throw new Error('下载失败');
+        const graphData = await res.json();
+
+        if (type === 'subgraphs') {
+            // Save as local subgraph and refresh list
+            const safeName = name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5_\-]/g, '_') + '.json';
+            await fetch(`/api/subgraphs/${encodeURIComponent(safeName)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(graphData),
+            });
+            fetchSubgraphs();
+            showMarketToast(`子图 "${name}" 已导入到本地子图库`);
+        } else {
+            // Load as current project
+            if (!confirm(`加载项目 "${name}" 将替换当前画布，确定吗？`)) return;
+            graph.configure(graphData);
+            graph.setDirtyCanvas(true);
+            currentFileName = name + '.json';
+            isSaved = false;
+            updateFileStatus();
+            closeMarket();
+            showMarketToast(`项目 "${name}" 已加载到画布`);
+        }
+    } catch (e) {
+        alert('导入失败: ' + e.message);
+    }
+}
+
+async function deleteMarketItem(id, type, name, cardEl) {
+    if (!confirm(`确定要从市场删除 "${name}" 吗？`)) return;
+    try {
+        const res = await fetch(`${marketBaseUrl}/api/market/${type}/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('删除失败');
+        cardEl.remove();
+        checkMarketStatus();
+    } catch (e) {
+        alert('删除失败: ' + e.message);
+    }
+}
+
+function updatePublishTypeUI() {
+    const type = document.getElementById('publish-type').value;
+    const row = document.getElementById('publish-subgraph-select-row');
+    row.style.display = type === 'subgraph' ? 'flex' : 'none';
+}
+
+async function populatePublishSubgraphList() {
+    const sel = document.getElementById('publish-subgraph-select');
+    sel.innerHTML = '<option value="">-- 请选择 --</option>';
+    try {
+        const res = await fetch('/api/subgraphs');
+        const data = await res.json();
+        (data.files || []).forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f;
+            opt.textContent = f.replace('.json', '');
+            sel.appendChild(opt);
+        });
+    } catch {}
+}
+
+async function publishToMarket() {
+    const feedback = document.getElementById('publish-feedback');
+
+    // Must be logged in
+    if (!accountToken) {
+        feedback.textContent = '请先登录后再发布';
+        feedback.style.color = '#f77';
+        closeMarket();
+        openAccountModal();
+        return;
+    }
+
+    const type = document.getElementById('publish-type').value;
+    const name = document.getElementById('publish-name').value.trim();
+    const description = document.getElementById('publish-description').value.trim();
+    const tagsRaw = document.getElementById('publish-tags').value.trim();
+    const author = accountUsername;
+
+    if (!name) { feedback.textContent = '请填写名称'; feedback.style.color = '#f44'; return; }
+
+    let graphData = null;
+
+    if (type === 'project') {
+        graphData = graph.serialize();
+    } else {
+        const subFile = document.getElementById('publish-subgraph-select').value;
+        if (!subFile) { feedback.textContent = '请选择一个子图'; feedback.style.color = '#f44'; return; }
+        try {
+            const res = await fetch(`/api/subgraphs/${encodeURIComponent(subFile)}`);
+            if (!res.ok) throw new Error();
+            graphData = await res.json();
+        } catch {
+            feedback.textContent = '读取子图失败';
+            feedback.style.color = '#f44';
+            return;
+        }
+    }
+
+    const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+    const endpoint = type === 'project'
+        ? `${marketBaseUrl}/api/market/projects`
+        : `${marketBaseUrl}/api/market/subgraphs`;
+
+    feedback.textContent = '发布中...';
+    feedback.style.color = '#aaa';
+
+    try {
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description, tags, graph: graphData }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            feedback.textContent = `发布成功！ID: ${data.id}`;
+            feedback.style.color = '#4caf50';
+            // Refresh corresponding list
+            loadMarketItems(type === 'project' ? 'projects' : 'subgraphs');
+            checkMarketStatus();
+            // Clear form
+            document.getElementById('publish-name').value = '';
+            document.getElementById('publish-description').value = '';
+            document.getElementById('publish-tags').value = '';
+        } else {
+            feedback.textContent = '发布失败: ' + (data.error || '未知错误');
+            feedback.style.color = '#f44';
+        }
+    } catch (e) {
+        feedback.textContent = '无法连接到市场服务器';
+        feedback.style.color = '#f44';
+    }
+}
+
+function showMarketToast(msg) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+        background:#2b3a55; color:#fff; padding:10px 20px; border-radius:6px;
+        border:1px solid #3b4a66; font-size:13px; z-index:9999;
+        box-shadow:0 4px 12px rgba(0,0,0,0.4); pointer-events:none;
+    `;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// ACCOUNT SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+
+const ACCOUNT_TOKEN_KEY = 'cortexnodus_token';
+const ACCOUNT_USER_KEY  = 'cortexnodus_user';
+
+let accountToken    = localStorage.getItem(ACCOUNT_TOKEN_KEY) || null;
+let accountUsername = localStorage.getItem(ACCOUNT_USER_KEY)  || null;
+
+function initAccount() {
+    // Buttons
+    document.getElementById('btn-account').addEventListener('click', openAccountModal);
+    document.getElementById('account-modal-close').addEventListener('click', closeAccountModal);
+    document.getElementById('account-modal-close2').addEventListener('click', closeAccountModal);
+    document.getElementById('account-modal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('account-modal')) closeAccountModal();
+    });
+
+    // Tab switching
+    document.querySelectorAll('.account-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.accountTab;
+            document.querySelectorAll('.account-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.account-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(`account-pane-${tab}`).classList.add('active');
+        });
+    });
+
+    // Login submit (Enter key support)
+    document.getElementById('login-password').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+    document.getElementById('login-username').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+    document.getElementById('login-submit-btn').addEventListener('click', doLogin);
+
+    // Register submit
+    document.getElementById('reg-password2').addEventListener('keydown', e => { if (e.key==='Enter') doRegister(); });
+    document.getElementById('register-submit-btn').addEventListener('click', doRegister);
+
+    // Logout
+    document.getElementById('logout-btn').addEventListener('click', doLogout);
+
+    // Restore session from localStorage
+    if (accountToken) {
+        verifyStoredToken();
+    }
+    updateAccountButton();
+}
+
+function openAccountModal() {
+    document.getElementById('account-modal').style.display = 'block';
+    if (accountToken && accountUsername) {
+        showLoggedView();
+    } else {
+        showGuestView();
+    }
+}
+
+function closeAccountModal() {
+    document.getElementById('account-modal').style.display = 'none';
+}
+
+function showGuestView() {
+    document.getElementById('account-guest-view').style.display = 'block';
+    document.getElementById('account-logged-view').style.display = 'none';
+}
+
+function showLoggedView() {
+    document.getElementById('account-guest-view').style.display = 'none';
+    document.getElementById('account-logged-view').style.display = 'block';
+    document.getElementById('logged-username').textContent = accountUsername || '';
+}
+
+async function verifyStoredToken() {
+    try {
+        const res = await fetch(`${marketBaseUrl}/api/auth/me`, {
+            headers: { 'Authorization': `Bearer ${accountToken}` },
+            signal: AbortSignal.timeout(4000),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            accountUsername = data.username;
+            localStorage.setItem(ACCOUNT_USER_KEY, accountUsername);
+            document.getElementById('logged-since').textContent = '注册于 ' + (data.created_at || '');
+        } else {
+            // Token invalid — clear
+            _clearSession();
+        }
+    } catch {
+        // Server offline, keep local state
+    }
+    updateAccountButton();
+}
+
+async function doLogin() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const fb = document.getElementById('login-feedback');
+    if (!username || !password) { fb.textContent = '请填写用户名和密码'; fb.style.color='#f77'; return; }
+    fb.textContent = '登录中...'; fb.style.color = '#aaa';
+    try {
+        const res = await fetch(`${marketBaseUrl}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            _saveSession(data.token, data.username);
+            fb.textContent = '';
+            document.getElementById('login-password').value = '';
+            showLoggedView();
+            updateAccountButton();
+            showMarketToast(`欢迎回来，${data.username}！`);
+        } else {
+            fb.textContent = data.error || '登录失败';
+            fb.style.color = '#f77';
+        }
+    } catch {
+        fb.textContent = '无法连接到市场服务器';
+        fb.style.color = '#f77';
+    }
+}
+
+async function doRegister() {
+    const username  = document.getElementById('reg-username').value.trim();
+    const password  = document.getElementById('reg-password').value;
+    const password2 = document.getElementById('reg-password2').value;
+    const fb = document.getElementById('register-feedback');
+    if (!username || !password) { fb.textContent = '请填写所有字段'; fb.style.color='#f77'; return; }
+    if (password !== password2) { fb.textContent = '两次密码不一致'; fb.style.color='#f77'; return; }
+    fb.textContent = '注册中...'; fb.style.color = '#aaa';
+    try {
+        const res = await fetch(`${marketBaseUrl}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            _saveSession(data.token, data.username);
+            fb.textContent = '';
+            document.getElementById('reg-password').value = '';
+            document.getElementById('reg-password2').value = '';
+            showLoggedView();
+            updateAccountButton();
+            showMarketToast(`注册成功，欢迎 ${data.username}！`);
+        } else {
+            fb.textContent = data.error || '注册失败';
+            fb.style.color = '#f77';
+        }
+    } catch {
+        fb.textContent = '无法连接到市场服务器';
+        fb.style.color = '#f77';
+    }
+}
+
+async function doLogout() {
+    if (accountToken) {
+        try {
+            await fetch(`${marketBaseUrl}/api/auth/logout`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${accountToken}` },
+            });
+        } catch {}
+    }
+    _clearSession();
+    updateAccountButton();
+    showGuestView();
+    showMarketToast('已退出登录');
+}
+
+function _saveSession(token, username) {
+    accountToken    = token;
+    accountUsername = username;
+    localStorage.setItem(ACCOUNT_TOKEN_KEY, token);
+    localStorage.setItem(ACCOUNT_USER_KEY, username);
+}
+
+function _clearSession() {
+    accountToken    = null;
+    accountUsername = null;
+    localStorage.removeItem(ACCOUNT_TOKEN_KEY);
+    localStorage.removeItem(ACCOUNT_USER_KEY);
+}
+
+function updateAccountButton() {
+    const btn = document.getElementById('btn-account');
+    if (accountUsername) {
+        btn.textContent = `👤 ${accountUsername}`;
+        btn.classList.add('logged-in');
+        // Unlock publish tab if it's currently active
+        if (marketCurrentTab === 'publish') {
+            document.getElementById('publish-submit-btn').disabled = false;
+            document.getElementById('publish-feedback').textContent = '';
+        }
+    } else {
+        btn.textContent = '👤 登录';
+        btn.classList.remove('logged-in');
+    }
+}
+
+// Patch initMarket to also init account and inject token into publish requests
+const _origInitMarket = initMarket;
+initMarket = async function() {
+    await _origInitMarket();
+    initAccount();
+};
+
+// Patch publishToMarket to attach auth header (override the function defined above)
+const _origPublish = publishToMarket;
+publishToMarket = async function() {
+    // Temporarily patch fetch inside publish flow by pre-filling author with logged-in username
+    if (accountUsername) {
+        const authorField = document.getElementById('publish-author');
+        if (authorField && !authorField.value.trim()) {
+            authorField.value = accountUsername;
+        }
+    }
+    // Use patched fetch that injects Authorization header
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts = {}) {
+        if (typeof url === 'string' && url.startsWith(marketBaseUrl) && accountToken) {
+            opts.headers = Object.assign({}, opts.headers || {}, { 'Authorization': `Bearer ${accountToken}` });
+        }
+        return _origFetch(url, opts);
+    };
+    try {
+        await _origPublish();
+    } finally {
+        window.fetch = _origFetch;
+    }
+};
+
+

@@ -20,6 +20,9 @@
         <button id="btn-gen">生成脚本</button>
         <button id="btn-export-app">导出应用</button>
         <button id="btn-autolayout">自动布局</button>
+        <button id="btn-market" style="background:#3a2b55;border-color:#5b4a77;">&#127978; 市场</button>
+        <button id="btn-account" style="background:#1e3a2b;border-color:#2a5a3b;">&#128100; 登录</button>
+        <button id="btn-about" style="background:#1a1a2e;border-color:#333;">关于</button>
         <input type="file" id="open-file-input" style="display:none" accept=".json">
       </div>
       <div class="file-info">
@@ -181,6 +184,169 @@
         <h3>训练运行中</h3>
         <div id="modal-status-text">正在初始化...</div>
         <pre id="modal-log"></pre>
+      </div>
+    </div>
+
+    <!-- ===== 市场弹窗 ===== -->
+    <div id="market-modal" class="modal">
+      <div class="modal-content market-modal-content">
+        <div class="market-header">
+          <span class="market-title">&#127978; CortexNodus 市场</span>
+          <div class="market-status-badge" id="market-status-badge">
+            <span class="market-status-dot" id="market-status-dot"></span>
+            <span id="market-status-text">连接中...</span>
+          </div>
+          <span class="close" id="market-modal-close">&times;</span>
+        </div>
+
+        <!-- 市场标签页 -->
+        <div class="market-tabs">
+          <button class="market-tab-btn active" data-market-tab="subgraphs">子图市场</button>
+          <button class="market-tab-btn" data-market-tab="projects">项目市场</button>
+          <button class="market-tab-btn market-tab-publish" data-market-tab="publish">&#10133; 发布</button>
+        </div>
+
+        <!-- 搜索栏 -->
+        <div class="market-search-bar" id="market-search-bar">
+          <input type="text" id="market-search-input" placeholder="搜索名称、描述或标签..." />
+          <button id="market-search-btn">搜索</button>
+          <button id="market-refresh-btn" title="刷新">&#8635;</button>
+        </div>
+
+        <!-- 子图市场 -->
+        <div id="market-pane-subgraphs" class="market-pane active">
+          <div id="market-subgraph-grid" class="market-grid">
+            <div class="market-loading">正在加载...</div>
+          </div>
+        </div>
+
+        <!-- 项目市场 -->
+        <div id="market-pane-projects" class="market-pane">
+          <div id="market-project-grid" class="market-grid">
+            <div class="market-loading">正在加载...</div>
+          </div>
+        </div>
+
+        <!-- 发布面板 -->
+        <div id="market-pane-publish" class="market-pane">
+          <div class="market-publish-form">
+            <h3 style="margin-top:0;color:#9fb1ff;">发布到市场</h3>
+            <div class="market-form-row">
+              <label>类型</label>
+              <select id="publish-type">
+                <option value="subgraph">子图</option>
+                <option value="project">项目（当前画布）</option>
+              </select>
+            </div>
+            <div class="market-form-row" id="publish-subgraph-select-row">
+              <label>选择子图</label>
+              <select id="publish-subgraph-select">
+                <option value="">-- 请选择 --</option>
+              </select>
+            </div>
+            <div class="market-form-row">
+              <label>名称 <span style="color:#dc3545;">*</span></label>
+              <input type="text" id="publish-name" placeholder="为你的作品起个名字" />
+            </div>
+            <div class="market-form-row">
+              <label>描述</label>
+              <textarea id="publish-description" rows="3" placeholder="简要描述用途、结构和效果..."></textarea>
+            </div>
+            <div class="market-form-row">
+              <label>标签</label>
+              <input type="text" id="publish-tags" placeholder="用逗号分隔，如: cnn, vision, 分类" />
+            </div>
+            <div style="margin-top:16px; display:flex; gap:12px;">
+              <button id="publish-submit-btn" style="flex:1;background:#3a5530;border-color:#4a7040;padding:10px;">&#10003; 发布</button>
+              <div id="publish-feedback" style="flex:2; display:flex; align-items:center; font-size:13px; color:#888;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 账号弹窗 ===== -->
+    <div id="account-modal" class="modal">
+      <div class="modal-content" style="max-width:420px;">
+
+        <!-- 未登录：注册/登录 -->
+        <div id="account-guest-view">
+          <span class="close" id="account-modal-close">&times;</span>
+          <h3 style="margin-bottom:16px;color:#7dbf7d;">&#128100; 账号</h3>
+          <div class="account-tabs">
+            <button class="account-tab-btn active" data-account-tab="login">登录</button>
+            <button class="account-tab-btn" data-account-tab="register">注册</button>
+          </div>
+
+          <!-- 登录 -->
+          <div id="account-pane-login" class="account-pane active">
+            <div class="market-form-row" style="margin-top:14px;">
+              <label>用户名</label>
+              <input type="text" id="login-username" placeholder="输入用户名" autocomplete="username" />
+            </div>
+            <div class="market-form-row">
+              <label>密码</label>
+              <input type="password" id="login-password" placeholder="输入密码" autocomplete="current-password" />
+            </div>
+            <div style="display:flex;gap:10px;margin-top:6px;align-items:center;">
+              <button id="login-submit-btn" style="flex:1;padding:9px;background:#2b4a35;border-color:#3a6a45;">登录</button>
+              <span id="login-feedback" style="flex:1.5;font-size:12px;color:#888;"></span>
+            </div>
+          </div>
+
+          <!-- 注册 -->
+          <div id="account-pane-register" class="account-pane">
+            <div class="market-form-row" style="margin-top:14px;">
+              <label>用户名 <span style="color:#dc3545;">*</span></label>
+              <input type="text" id="reg-username" placeholder="2–32 个字符" autocomplete="username" />
+            </div>
+            <div class="market-form-row">
+              <label>密码 <span style="color:#dc3545;">*</span></label>
+              <input type="password" id="reg-password" placeholder="至少 6 个字符" autocomplete="new-password" />
+            </div>
+            <div class="market-form-row">
+              <label>确认密码 <span style="color:#dc3545;">*</span></label>
+              <input type="password" id="reg-password2" placeholder="再次输入密码" autocomplete="new-password" />
+            </div>
+            <div style="display:flex;gap:10px;margin-top:6px;align-items:center;">
+              <button id="register-submit-btn" style="flex:1;padding:9px;background:#2b3a55;border-color:#3b4a66;">注册</button>
+              <span id="register-feedback" style="flex:1.5;font-size:12px;color:#888;"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 已登录：个人信息 -->
+        <div id="account-logged-view" style="display:none;">
+          <span class="close" id="account-modal-close2">&times;</span>
+          <div style="text-align:center;padding:16px 0 20px;">
+            <div style="font-size:48px;margin-bottom:10px;">&#128100;</div>
+            <div style="font-size:20px;font-weight:bold;color:#7dbf7d;" id="logged-username">—</div>
+            <div style="font-size:12px;color:#666;margin-top:4px;" id="logged-since">注册于 —</div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button id="logout-btn" style="flex:1;background:#552b2b;border-color:#663b3b;padding:9px;">退出登录</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== 关于弹窗 ===== -->
+    <div id="about-modal" class="modal">
+      <div class="modal-content" style="max-width:400px;text-align:center;padding:36px 40px;">
+        <span class="close" id="about-modal-close" style="float:right;margin-top:-16px;">&times;</span>
+        <div style="font-size:42px;margin-bottom:12px;">🧠</div>
+        <div style="font-size:22px;font-weight:bold;color:#9fb1ff;margin-bottom:6px;">CortexNodus</div>
+        <div style="font-size:12px;color:#666;margin-bottom:24px;letter-spacing:1px;">可视化神经网络设计工具</div>
+        <hr style="border:none;border-top:1px solid #333;margin-bottom:24px;">
+        <div style="font-size:13px;color:#aaa;line-height:2;">
+          <div>作者</div>
+          <div style="font-size:16px;font-weight:bold;color:#eaeaea;margin:4px 0 12px;">闻家贤</div>
+          <div>电子科技大学</div>
+          <div style="font-size:12px;color:#666;margin-top:2px;">University of Electronic Science<br>and Technology of China</div>
+        </div>
+        <hr style="border:none;border-top:1px solid #333;margin:24px 0 16px;">
+        <div style="font-size:11px;color:#555;">基于 LiteGraph.js · PyTorch · Flask</div>
       </div>
     </div>
 

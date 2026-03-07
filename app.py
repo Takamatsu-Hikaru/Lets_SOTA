@@ -501,7 +501,7 @@ def handle_connect():
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    logger.info("� 前端已断开连接")
+    logger.info("🔌 前端已断开连接")
 
 @socketio.on('request_logs')
 def handle_request_logs():
@@ -594,6 +594,16 @@ def delete_subgraph(name):
         return jsonify({"error": str(e)}), 500
 
 
+# ── Marketplace proxy routes ───────────────────────────────────────────────────
+
+MARKET_SERVER_URL = os.environ.get("MARKET_SERVER_URL", "https://cortexnodus.streetartist.top")
+
+@app.route("/api/market_config", methods=["GET"])
+def market_config():
+    """告知前端市场服务器的地址"""
+    return jsonify({"url": MARKET_SERVER_URL})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     # 在训练过程中禁用调试模式以避免文件变化导致的自动重启
@@ -613,4 +623,13 @@ if __name__ == "__main__":
         
         werkzeug.serving._is_changed = patched_is_changed
     
+    url = f"http://localhost:{port}"
+    print(f"""
+  ╔══════════════════════════════════════════╗
+  ║          CortexNodus Workbench           ║
+  ║──────────────────────────────────────────║
+  ║  {url:<40s}║
+  ╚══════════════════════════════════════════╝
+  Press Ctrl+C to quit.
+""")
     socketio.run(app, host="0.0.0.0", port=port, debug=debug_mode)
