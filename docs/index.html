@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Let's SOTA!!!!!</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+:root {
+    --bg: #0e0e12; --surface: #1a1a1f; --border: rgba(83,74,183,0.18);
+    --text: #e2e0ed; --text2: #8d89a3; --text3: #5a5670;
+    --primary: #534AB7; --primary-bg: rgba(83,74,183,0.14);
+    --gold: #f0b839; --green: #3aaa7e; --red: #e25656;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+.container { max-width:1100px; margin:0 auto; padding:0 24px; }
+
+/* Hero */
+.hero { text-align:center; padding:80px 0 60px; background:linear-gradient(180deg, rgba(83,74,183,0.08) 0%, transparent 100%); border-bottom:1px solid var(--border); }
+.hero-icon { font-size:56px; color:var(--primary); margin-bottom:8px; }
+.hero h1 { font-size:42px; font-weight:700; letter-spacing:-0.5px; background:linear-gradient(135deg, #8f88e8, #534AB7, #7b74d4); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.hero .subtitle { font-size:17px; color:var(--text2); margin-top:8px; }
+.hero .badges { margin-top:20px; display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+.hero .badges span { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500; }
+.badge-purple { background:var(--primary-bg); color:#8f88e8; border:1px solid rgba(83,74,183,0.3); }
+.badge-gold { background:rgba(240,184,57,0.12); color:var(--gold); border:1px solid rgba(240,184,57,0.25); }
+.badge-green { background:rgba(58,170,126,0.12); color:var(--green); border:1px solid rgba(58,170,126,0.25); }
+.hero .cta { margin-top:32px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+.btn { display:inline-flex; align-items:center; gap:8px; padding:12px 24px; border-radius:8px; font-size:14px; font-weight:600; text-decoration:none; transition:all 0.2s; }
+.btn-primary { background:var(--primary); color:#fff; }
+.btn-primary:hover { background:#4339a6; transform:translateY(-1px); box-shadow:0 8px 24px rgba(83,74,183,0.35); }
+.btn-outline { border:1px solid var(--primary); color:#8f88e8; }
+.btn-outline:hover { background:var(--primary-bg); }
+
+/* Section */
+.section { padding:60px 0; }
+.section h2 { font-size:24px; font-weight:600; margin-bottom:8px; color:var(--text); }
+.section .lead { color:var(--text2); margin-bottom:28px; font-size:14px; }
+
+/* Loop */
+.loop { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom:40px; }
+.loop-node { padding:12px 20px; background:var(--surface); border:1px solid var(--border); border-radius:12px; font-size:14px; font-weight:500; text-align:center; width:120px; }
+.loop-arrow { display:flex; align-items:center; color:var(--primary); font-size:20px; font-weight:bold; }
+.loop-node.highlight { border-color:var(--primary); background:var(--primary-bg); color:#8f88e8; }
+
+/* Cards */
+.grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:16px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; transition:border-color 0.2s; }
+.card:hover { border-color:rgba(83,74,183,0.35); }
+.card-icon { font-size:28px; color:var(--primary); margin-bottom:10px; }
+.card h3 { font-size:15px; font-weight:600; margin-bottom:6px; }
+.card p { font-size:13px; color:var(--text2); line-height:1.55; }
+
+/* Tiers */
+.tiers { display:flex; justify-content:center; gap:6px; flex-wrap:wrap; margin-top:20px; }
+.tier { padding:8px 18px; border-radius:20px; font-size:12px; font-weight:500; text-align:center; }
+.tier-bronze { background:rgba(205,127,50,0.12); color:#cd7f32; }
+.tier-silver { background:rgba(192,192,192,0.1); color:#c0c0c0; }
+.tier-gold { background:rgba(255,215,0,0.1); color:#ffd700; }
+.tier-platinum { background:rgba(229,228,226,0.1); color:#e5e4e2; }
+.tier-diamond { background:rgba(185,242,255,0.1); color:#b9f2ff; }
+.tier-champion { background:rgba(240,184,57,0.14); color:var(--gold); border:1px solid rgba(240,184,57,0.3); }
+
+/* Achievements */
+.ach-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); gap:10px; }
+.ach-row { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+.ach-row i { font-size:20px; width:28px; text-align:center; }
+.ach-info { flex:1; }
+.ach-info .n { font-size:13px; font-weight:500; }
+.ach-info .d { font-size:11px; color:var(--text2); }
+.ach-rarity { font-size:10px; padding:3px 10px; border-radius:20px; font-weight:500; }
+.r-common { background:rgba(141,137,163,0.12); color:var(--text2); }
+.r-rare { background:rgba(123,116,212,0.15); color:#9b94e0; }
+.r-epic { background:rgba(143,136,232,0.15); color:#b5b0f0; }
+.r-legendary { background:rgba(240,184,57,0.14); color:var(--gold); }
+
+/* Code block */
+.code { background:#0a0a0f; border:1px solid var(--border); border-radius:10px; padding:20px; font-family:"SF Mono","Fira Code",monospace; font-size:13px; color:#8d89a3; overflow-x:auto; }
+
+/* Footer */
+.footer { text-align:center; padding:40px 0; border-top:1px solid var(--border); color:var(--text3); font-size:12px; }
+.footer a { color:var(--text2); }
+
+/* Stats */
+.stats { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; }
+.stat { text-align:center; }
+.stat .val { font-size:28px; font-weight:700; color:var(--primary); }
+.stat .lab { font-size:12px; color:var(--text2); }
+
+/* Responsive */
+@media(max-width:640px) {
+    .hero h1 { font-size:30px; }
+    .loop { flex-direction:column; align-items:center; }
+    .loop-arrow { transform:rotate(90deg); }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-icon"><i class="ti ti-brain"></i></div>
+        <h1>Let's SOTA!!!!!</h1>
+        <p class="subtitle">AI Model Arena — Design · Train · Compete · Climb</p>
+        <div class="badges">
+            <span class="badge-purple"><i class="ti ti-trophy"></i> Kaggle-style Leaderboard</span>
+            <span class="badge-gold"><i class="ti ti-crown"></i> SOTA Champion</span>
+            <span class="badge-green"><i class="ti ti-star"></i> 20 Achievements</span>
+        </div>
+        <div class="cta">
+            <a href="https://github.com/Takamatsu-Hikaru/Lets_SOTA" class="btn btn-primary"><i class="ti ti-brand-github"></i> View on GitHub</a>
+            <a href="#features" class="btn btn-outline"><i class="ti ti-arrow-down"></i> Explore Features</a>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ CORE LOOP ═══ -->
+<section class="section">
+    <div class="container">
+        <h2><i class="ti ti-refresh" style="color:var(--primary)"></i> Core Loop</h2>
+        <p class="lead">Kaggle's competitiveness × Scratch's drag-and-drop × Gamified achievements</p>
+        <div class="loop">
+            <div class="loop-node highlight"><i class="ti ti-pencil"></i><br>Design Model</div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-node"><i class="ti ti-database"></i><br>Pick Dataset</div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-node"><i class="ti ti-player-play"></i><br>Train</div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-node"><i class="ti ti-send"></i><br>Submit Score</div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-node highlight"><i class="ti ti-trophy"></i><br>Leaderboard</div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-node"><i class="ti ti-refresh"></i><br>Optimize</div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ FEATURES ═══ -->
+<section class="section" id="features" style="background:rgba(83,74,183,0.03);">
+    <div class="container">
+        <h2><i class="ti ti-sparkles" style="color:var(--gold)"></i> Features</h2>
+        <div class="grid">
+            <div class="card">
+                <div class="card-icon"><i class="ti ti-chart-bar"></i></div>
+                <h3>Live Leaderboard</h3>
+                <p>6 datasets × 4 hardware tiers × 3 ranking metrics. Filter by CPU/GPU tier for fair comparison.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ti ti-puzzle"></i></div>
+                <h3>Drag &amp; Drop Model Design</h3>
+                <p>LiteGraph visual editor with 40+ node types. Build CNNs, ResNets, Transformers visually.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ti ti-star"></i></div>
+                <h3>20 Achievements</h3>
+                <p>First blood → SOTA Breaker (Legendary). Unlock with chime + toast notification.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ti ti-medal"></i></div>
+                <h3>ELO Rankings</h3>
+                <p>6-tier system: Bronze → Silver → Gold → Platinum → Diamond → SOTA Champion.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ti ti-calendar-stats"></i></div>
+                <h3>Season System</h3>
+                <p>30-day seasons with snapshot freeze, badge awards, and fresh leaderboard each cycle.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ti ti-flame"></i></div>
+                <h3>Daily Challenges</h3>
+                <p>8 rotating constraint templates — new challenge every day. 'No Convolution', 'Speedrun', 'Tiny Model'...</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ti ti-book"></i></div>
+                <h3>Interactive Tutorial</h3>
+                <p>Shadow puzzle placement guides you through building LeNet-5, CNN, and ResNet. Auto-fill after 30s idle.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ti ti-box"></i></div>
+                <h3>Model Zoo</h3>
+                <p>5 preset architectures with pre-built LiteGraph JSON. LeNet-5, ResNet, VGG, MLP, Transformer.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ TIERS ═══ -->
+<section class="section">
+    <div class="container">
+        <h2 style="text-align:center"><i class="ti ti-crown" style="color:var(--gold)"></i> Ranking Tiers</h2>
+        <div class="tiers">
+            <span class="tier tier-bronze"><i class="ti ti-circle"></i> Bronze &lt;90%</span>
+            <span class="tier tier-silver"><i class="ti ti-circle"></i> Silver 90%</span>
+            <span class="tier tier-gold"><i class="ti ti-star"></i> Gold 95%</span>
+            <span class="tier tier-platinum"><i class="ti ti-diamond"></i> Platinum 98%</span>
+            <span class="tier tier-diamond"><i class="ti ti-diamond"></i> Diamond 99%</span>
+            <span class="tier tier-champion"><i class="ti ti-crown"></i> SOTA Champion 99.5%+</span>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ ACHIEVEMENTS ═══ -->
+<section class="section" style="background:rgba(83,74,183,0.03);">
+    <div class="container">
+        <h2><i class="ti ti-award" style="color:var(--gold)"></i> Achievement Highlights</h2>
+        <div class="ach-grid">
+            <div class="ach-row"><i class="ti ti-trophy" style="color:#8d89a3"></i><div class="ach-info"><div class="n">First Blood</div><div class="d">Complete your first training run</div></div><span class="ach-rarity r-common">Common</span></div>
+            <div class="ach-row"><i class="ti ti-flame" style="color:#8d89a3"></i><div class="ach-info"><div class="n">Grinder</div><div class="d">Complete 50 training runs</div></div><span class="ach-rarity r-rare">Rare</span></div>
+            <div class="ach-row"><i class="ti ti-target" style="color:#b5b0f0"></i><div class="ach-info"><div class="n">99% Club</div><div class="d">Break 99% accuracy on any dataset</div></div><span class="ach-rarity r-epic">Epic</span></div>
+            <div class="ach-row"><i class="ti ti-cpu" style="color:#b5b0f0"></i><div class="ach-info"><div class="n">Speedrunner</div><div class="d">Reach 98%+ in under 60 seconds</div></div><span class="ach-rarity r-epic">Epic</span></div>
+            <div class="ach-row"><i class="ti ti-crown" style="color:#f0b839"></i><div class="ach-info"><div class="n">SOTA Breaker</div><div class="d">Claim #1 on any leaderboard</div></div><span class="ach-rarity r-legendary">Legendary</span></div>
+            <div class="ach-row"><i class="ti ti-sword" style="color:#f0b839"></i><div class="ach-info"><div class="n">Dethroned</div><div class="d">Break someone else's SOTA record</div></div><span class="ach-rarity r-legendary">Legendary</span></div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ QUICK START ═══ -->
+<section class="section">
+    <div class="container">
+        <h2><i class="ti ti-terminal-2" style="color:var(--primary)"></i> Quick Start</h2>
+        <div class="code">
+git clone https://github.com/Takamatsu-Hikaru/Lets_SOTA.git<br>
+cd Lets_SOTA<br>
+pip install -r requirements.txt<br>
+python app.py<br><br>
+<span style="color:#5a5670"># Open http://localhost:5000 — Arena</span><br>
+<span style="color:#5a5670"># Open http://localhost:5000/workshop — Studio</span>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="footer">
+    <div class="container">
+        <p>Let's SOTA!!!!! &mdash; Based on <a href="https://github.com/streetartist/CortexNodus">CortexNodus</a></p>
+        <p style="margin-top:4px">Powered by PyTorch &middot; Flask &middot; LiteGraph.js</p>
+    </div>
+</footer>
+
+</body>
+</html>
