@@ -1,0 +1,10 @@
+{
+  "name": "MLP Baseline",
+  "description": "纯全连接网络基线。Flatten → Dense(256) → ReLU → Dropout → Dense(128) → ReLU → Dense(10)。在 MNIST 上预计 97-98%",
+  "source": "Baseline",
+  "paper_url": "",
+  "dataset": "mnist",
+  "expected_accuracy": "97-98%",
+  "params": "~235K",
+  "layers": 5
+}

@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Studio - Let's SOTA!!!!!</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/tutorial.css">
+    <script src="https://unpkg.com/litegraph.js/build/litegraph.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .workshop-header {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #0d0d1a; padding: 6px 16px; border-bottom: 1px solid #333;
+        }
+        .workshop-header .brand {
+            display: flex; align-items: center; gap: 10px;
+        }
+        .workshop-header .brand span {
+            font-size: 16px; font-weight: 600; color: #8f88e8;
+        }
+        .arena-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 14px; background: #534AB7; color: white;
+            text-decoration: none; border-radius: 6px; font-size: 13px;
+            transition: opacity 0.15s;
+        }
+        .arena-link:hover { opacity: 0.85; }
+        .title { font-size: 15px !important; color: #8f88e8 !important; }
+    </style>
+</head>
+<body>
+    <div class="workshop-header">
+        <div class="brand">
+            <span>Let's SOTA!!!!!</span>
+            <span style="color:#555;font-size:12px">|</span>
+            <span class="title">Studio</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <button id="btn-tutorial" class="tutorial-entry-btn">
+                <i class="ti ti-book"></i> Tutorial
+            </button>
+            <a href="/" class="arena-link"><i class="ti ti-trophy"></i> Back to Arena</a>
+        </div>
+    </div>
+    <header class="topbar">
+        <div class="title">Studio</div>
+        <div class="actions">
+            <button id="btn-new">New</button>
+            <button id="btn-open">Open</button>
+            <button id="btn-save">Save</button>
+            <button id="btn-save-as">Save As</button>
+            <button id="btn-run">Run Training</button>
+            <button id="btn-gen">Generate Script</button>
+            <button id="btn-export-app">Export App</button>
+            <button id="btn-autolayout">Auto Layout</button>
+            <button id="btn-market" style="background:#3a2b55;border-color:#5b4a77;">Market</button>
+            <input type="file" id="open-file-input" style="display:none" accept=".json">
+        </div>
+        <div class="file-info">
+            <span id="current-file">Unsaved</span>
+        </div>
+    </header>
+
+    <main class="layout">
+        <aside class="palette">
+            <h3>Nodes</h3>
+            <input type="text" id="node-search" placeholder="Search nodes..." style="width:100%;margin-bottom:10px;padding:6px;background:#1a1a1a;color:#eaeaea;border:1px solid #444;">
+            <div class="group">Data</div>
+            <button class="node" data-type="MNIST">MNIST</button>
+            <button class="node" data-type="Fashion-MNIST">Fashion-MNIST</button>
+            <button class="node" data-type="CIFAR-10">CIFAR-10</button>
+            <button class="node" data-type="WikiText-2">WikiText-2</button>
+            <button class="node" data-type="WikiText-103">WikiText-103</button>
+            <button class="node" data-type="PennTreebank">Penn Treebank</button>
+            <button class="node" data-type="CustomData">Custom Data</button>
+
+            <div class="group">Convolution & Pooling</div>
+            <button class="node" data-type="Conv2D">Conv2D</button>
+            <button class="node" data-type="ConvTranspose2d">ConvTranspose2d</button>
+            <button class="node" data-type="MaxPool">MaxPool</button>
+            <button class="node" data-type="AvgPool">AvgPool</button>
+            <button class="node" data-type="AdaptiveAvgPool">AdaptiveAvgPool</button>
+            <button class="node" data-type="Upsample">Upsample</button>
+            <button class="node" data-type="PixelShuffle">PixelShuffle</button>
+            <button class="node" data-type="ZeroPad2d">ZeroPad2d</button>
+
+            <div class="group">Activations</div>
+            <button class="node" data-type="ReLU">ReLU</button>
+            <button class="node" data-type="LeakyReLU">LeakyReLU</button>
+            <button class="node" data-type="PReLU">PReLU</button>
+            <button class="node" data-type="ELU">ELU</button>
+            <button class="node" data-type="GELU">GELU</button>
+            <button class="node" data-type="SiLU">SiLU</button>
+            <button class="node" data-type="Hardswish">Hardswish</button>
+            <button class="node" data-type="Hardsigmoid">Hardsigmoid</button>
+            <button class="node" data-type="Sigmoid">Sigmoid</button>
+            <button class="node" data-type="Tanh">Tanh</button>
+            <button class="node" data-type="Softplus">Softplus</button>
+            <button class="node" data-type="Softmax">Softmax</button>
+            <button class="node" data-type="LogSoftmax">LogSoftmax</button>
+
+            <div class="group">Core Layers</div>
+            <button class="node" data-type="Dense">Dense</button>
+            <button class="node" data-type="Flatten">Flatten</button>
+            <button class="node" data-type="Dropout">Dropout</button>
+            <button class="node" data-type="Dropout2d">Dropout2d</button>
+            <button class="node" data-type="AlphaDropout">AlphaDropout</button>
+            <button class="node" data-type="BatchNorm2d">BatchNorm2d</button>
+            <button class="node" data-type="BatchNorm1d">BatchNorm1d</button>
+            <button class="node" data-type="InstanceNorm2d">InstanceNorm2d</button>
+            <button class="node" data-type="GroupNorm">GroupNorm</button>
+            <button class="node" data-type="LayerNorm">LayerNorm</button>
+            <button class="node" data-type="Identity">Identity</button>
+
+            <div class="group">Transformer & NLP</div>
+            <button class="node" data-type="Embedding">Embedding</button>
+            <button class="node" data-type="PositionalEncoding">Positional Encoding</button>
+            <button class="node" data-type="GPTBlock">GPT Block</button>
+            <button class="node" data-type="TransformerEncoderLayer">Transformer Encoder Layer</button>
+            <button class="node" data-type="TransformerEncoder">Transformer Encoder</button>
+            <button class="node" data-type="TransformerDecoderLayer">Transformer Decoder Layer</button>
+            <button class="node" data-type="TransformerDecoder">Transformer Decoder</button>
+            <button class="node" data-type="MultiheadAttention">Multihead Attention</button>
+            <button class="node" data-type="Linear">Linear</button>
+
+            <div class="group">Merge</div>
+            <button class="node" data-type="Add">Add</button>
+            <button class="node" data-type="Multiply">Multiply</button>
+            <button class="node" data-type="Concat">Concat</button>
+
+            <div class="group">Custom</div>
+            <button class="node" data-type="CustomLayer">Custom Layer</button>
+
+            <div class="group">Inline Subgraph</div>
+            <div id="embedded-subgraph-list" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;"></div>
+            <button id="btn-new-embedded-subgraph" style="width:100%;">+ New Inline Subgraph</button>
+
+            <div class="group">Subgraphs</div>
+            <div id="subgraph-list" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;"></div>
+            <button id="btn-new-subgraph" style="width:100%;">+ New Subgraph</button>
+
+            <div class="group">Training</div>
+            <button class="node" data-type="Loss">Training Goal</button>
+        </aside>
+
+        <section class="canvas-wrap">
+            <div id="breadcrumbs" class="breadcrumbs" style="display:none;">
+                <span id="breadcrumb-path">Root</span>
+            </div>
+            <canvas id="graphcanvas" width="1000" height="700"></canvas>
+        </section>
+
+        <aside class="inspector">
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="inspector-tab">Properties</button>
+                <button class="tab-btn" data-tab="charts-tab">Charts</button>
+                <button class="tab-btn" data-tab="logs-tab">Logs</button>
+                <button class="tab-btn" data-tab="viz-tab">Visualization</button>
+            </div>
+            <div class="tabs-content">
+                <div id="inspector-tab" class="tab-pane active">
+                    <div id="inspector"></div>
+                </div>
+                <div id="charts-tab" class="tab-pane">
+                    <div id="charts-container" style="height:100%;padding:8px;display:flex;flex-direction:column;gap:10px;">
+                        <div style="flex:1;min-height:0;position:relative;"><canvas id="loss-chart"></canvas></div>
+                        <div style="flex:1;min-height:0;position:relative;"><canvas id="acc-chart"></canvas></div>
+                    </div>
+                </div>
+                <div id="logs-tab" class="tab-pane">
+                    <div id="mini-log-container" style="display:flex;flex-direction:column;height:100%;">
+                        <div style="padding:8px;">
+                            <button id="btn-stop-training" style="width:100%;background:#444;color:#aaa;border:none;padding:8px 12px;border-radius:4px;cursor:not-allowed;font-size:13px;font-weight:bold;" disabled>Stop Training</button>
+                            <div id="training-status-bar" style="font-size:12px;color:#888;margin-top:8px;font-family:monospace;text-align:center;padding:4px;background:#2a2a2a;border-radius:3px;border:1px solid #444;">Ready</div>
+                        </div>
+                        <div id="mini-log" style="flex:1;overflow-y:auto;background:#111;padding:8px;font-family:'Consolas','Monaco',monospace;font-size:11px;color:#ccc;border:1px solid #333;margin:0 8px 8px 8px;border-radius:4px;"></div>
+                    </div>
+                </div>
+                <div id="viz-tab" class="tab-pane">
+                    <div id="viz-container" style="padding:8px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;height:100%;">
+                        <div class="viz-item"><h4>Loss Curve</h4><img id="viz-loss-curve" src="" alt="Waiting for training..." style="width:100%;border-radius:4px;display:none;"></div>
+                        <div class="viz-item"><h4>Confusion Matrix</h4><img id="viz-confusion-matrix" src="" alt="Waiting for training..." style="width:100%;border-radius:4px;display:none;"></div>
+                        <div class="viz-item"><h4>Predictions</h4><img id="viz-predictions" src="" alt="Waiting for training..." style="width:100%;border-radius:4px;display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <div id="run-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>Training</h3>
+            <div id="modal-status-text">Initializing...</div>
+            <pre id="modal-log"></pre>
+        </div>
+    </div>
+
+    <!-- Market Modal -->
+    <div id="market-modal" class="modal">
+        <div class="modal-content market-modal-content">
+            <div class="market-header">
+                <span class="market-title">Marketplace</span>
+                <div class="market-status-badge" id="market-status-badge">
+                    <span class="market-status-dot" id="market-status-dot"></span>
+                    <span id="market-status-text">Connecting...</span>
+                </div>
+                <span class="close" id="market-modal-close">&times;</span>
+            </div>
+            <div class="market-tabs">
+                <button class="market-tab-btn active" data-market-tab="subgraphs">Subgraphs</button>
+                <button class="market-tab-btn" data-market-tab="projects">Projects</button>
+                <button class="market-tab-btn market-tab-publish" data-market-tab="publish">+ Publish</button>
+            </div>
+            <div class="market-search-bar" id="market-search-bar">
+                <input type="text" id="market-search-input" placeholder="Search name, description, or tags..." />
+                <button id="market-search-btn">Search</button>
+                <button id="market-refresh-btn" title="Refresh">&#8635;</button>
+            </div>
+            <div id="market-pane-subgraphs" class="market-pane active">
+                <div id="market-subgraph-grid" class="market-grid"><div class="market-loading">Loading...</div></div>
+            </div>
+            <div id="market-pane-projects" class="market-pane">
+                <div id="market-project-grid" class="market-grid"><div class="market-loading">Loading...</div></div>
+            </div>
+            <div id="market-pane-publish" class="market-pane">
+                <div class="market-publish-form">
+                    <h3 style="margin-top:0;color:#9fb1ff;">Publish to Marketplace</h3>
+                    <div class="market-form-row">
+                        <label>Type</label>
+                        <select id="publish-type"><option value="subgraph">Subgraph</option><option value="project">Project</option></select>
+                    </div>
+                    <div class="market-form-row" id="publish-subgraph-select-row">
+                        <label>Select Subgraph</label>
+                        <select id="publish-subgraph-select"><option value="">-- select --</option></select>
+                    </div>
+                    <div class="market-form-row">
+                        <label>Name <span style="color:#dc3545;">*</span></label>
+                        <input type="text" id="publish-name" placeholder="Name your creation" />
+                    </div>
+                    <div class="market-form-row">
+                        <label>Description</label>
+                        <textarea id="publish-description" rows="3" placeholder="Brief description..."></textarea>
+                    </div>
+                    <div class="market-form-row">
+                        <label>Tags</label>
+                        <input type="text" id="publish-tags" placeholder="comma, separated, tags" />
+                    </div>
+                    <div style="margin-top:16px;display:flex;gap:12px;">
+                        <button id="publish-submit-btn" style="flex:1;background:#3a5530;border-color:#4a7040;padding:10px;">Publish</button>
+                        <div id="publish-feedback" style="flex:2;display:flex;align-items:center;font-size:13px;color:#888;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/static/designer.js"></script>
+    <script src="/static/tutorial.js"></script>
+    <script>
+        // Tutorial init — must run after designer.js sets up global graph + canvas
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (typeof graph !== 'undefined' && typeof canvas !== 'undefined') {
+                    initTutorial(graph, canvas);
+                }
+            }, 800);
+        });
+
+        document.getElementById('btn-tutorial').addEventListener('click', function() {
+            if (!tutorial) return;
+            if (tutorial.active) {
+                tutorial.stop();
+                this.innerHTML = '<i class="ti ti-book"></i> Tutorial';
+            } else {
+                var choice = prompt(
+                    'Choose a tutorial module:\n\n' +
+                    '1. LeNet-5 — Classic MNIST digit classifier (Easy)\n' +
+                    '2. CNN — Conv+BatchNorm for CIFAR-10 (Medium)\n' +
+                    '3. ResNet-18 Lite — Residual skip connection (Advanced)\n',
+                    '1'
+                );
+                var mods = ['lenet5', 'cnn', 'resnet'];
+                var idx = (parseInt(choice) || 1) - 1;
+                if (idx >= 0 && idx < 3) {
+                    tutorial.start(mods[idx]);
+                    this.innerHTML = '<i class="ti ti-x"></i> Exit Tutorial';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

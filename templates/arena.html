@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Let's SOTA!!!!!</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <link rel="stylesheet" href="/static/arena.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="arena-app">
+    <!-- Header -->
+    <header class="arena-header">
+        <div class="arena-player">
+            <span id="player-name">Anonymous</span>
+            <span class="hardware-badge" id="hw-badge"><i class="ti ti-cpu"></i> CPU</span>
+            <span class="season-badge" id="season-badge" style="display:none">
+                <i class="ti ti-calendar-stats"></i> <span id="season-name"></span>
+            </span>
+            <button onclick="editPlayerName()" style="background:none;border:none;cursor:pointer;color:var(--arena-text-2);padding:2px">
+                <i class="ti ti-edit"></i>
+            </button>
+        </div>
+        <div class="arena-header-right">
+            <a href="/workshop" class="header-btn">
+                <i class="ti ti-tools"></i> Studio
+            </a>
+            <div class="arena-logo">
+                <i class="ti ti-brain"></i>
+                <span>Let's SOTA!!!!!</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="arena-tabs" id="tabs">
+        <button class="arena-tab active" data-tab="arena" onclick="switchTab('arena')">
+            <i class="ti ti-trophy"></i> Arena
+        </button>
+        <button class="arena-tab" data-tab="train" onclick="switchTab('train')">
+            <i class="ti ti-player-play"></i> Train
+        </button>
+        <button class="arena-tab" data-tab="replays" onclick="switchTab('replays')">
+            <i class="ti ti-eye"></i> Replays
+        </button>
+        <button class="arena-tab" data-tab="achieve" onclick="switchTab('achieve')">
+            <i class="ti ti-star"></i> Achievements
+        </button>
+        <button class="arena-tab" data-tab="rankings" onclick="switchTab('rankings')">
+            <i class="ti ti-medal"></i> Rankings
+        </button>
+        <button class="arena-tab" data-tab="season" onclick="switchTab('season')">
+            <i class="ti ti-calendar-stats"></i> Season
+        </button>
+    </nav>
+
+    <!-- ============================================================ -->
+    <!--  ARENA (Leaderboard) Panel                                   -->
+    <!-- ============================================================ -->
+    <section id="panel-arena" class="arena-panel">
+        <!-- Daily Challenge -->
+        <div id="daily-challenge" class="challenge-card" style="display:none">
+            <div class="challenge-header">
+                <span class="challenge-badge"><i class="ti ti-flame"></i> Daily Challenge</span>
+                <span class="challenge-date" id="challenge-date"></span>
+            </div>
+            <div class="challenge-body">
+                <div class="challenge-title" id="challenge-title"></div>
+                <div class="challenge-desc" id="challenge-desc"></div>
+                <div class="challenge-meta" id="challenge-meta"></div>
+            </div>
+            <div class="challenge-action">
+                <button class="challenge-btn" onclick="switchTab('train')">
+                    <i class="ti ti-player-play"></i> Accept Challenge
+                </button>
+            </div>
+        </div>
+
+        <div class="stats-grid" id="global-stats"></div>
+
+        <div class="lb-controls">
+            <select id="ds-filter" onchange="loadLeaderboard()">
+                <option value="mnist">MNIST</option>
+                <option value="fashion-mnist">Fashion-MNIST</option>
+                <option value="cifar10">CIFAR-10</option>
+                <option value="cifar100">CIFAR-100</option>
+                <option value="svhn">SVHN</option>
+                <option value="imagenet-tiny">Tiny ImageNet</option>
+            </select>
+            <select id="tier-filter" onchange="loadLeaderboard()">
+                <option value="all">All Hardware</option>
+                <option value="cpu">CPU only</option>
+                <option value="gpu-low">GPU Low</option>
+                <option value="gpu-mid">GPU Mid</option>
+                <option value="gpu-high">GPU High</option>
+            </select>
+            <select id="metric-filter" onchange="loadLeaderboard()">
+                <option value="accuracy">By Accuracy</option>
+                <option value="loss">By Loss</option>
+                <option value="speed">By Speed (95%+)</option>
+            </select>
+        </div>
+
+        <div class="lb-table">
+            <div class="lb-row lb-header">
+                <span class="lb-rank">#</span>
+                <span class="lb-player">Player</span>
+                <span class="lb-model">Model</span>
+                <span class="lb-acc">Accuracy</span>
+                <span class="lb-time">Time</span>
+                <span class="lb-hw">Hardware</span>
+                <span class="lb-action"></span>
+            </div>
+            <div id="lb-body"></div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!--  TRAIN Panel                                                 -->
+    <!-- ============================================================ -->
+    <section id="panel-train" class="arena-panel" style="display:none">
+        <div class="train-layout">
+            <div class="train-config">
+                <h3>Model Source</h3>
+                <div class="source-selector">
+                    <label class="source-option active" id="source-preset" onclick="selectModelSource('preset')">
+                        <input type="radio" name="model-source" value="preset" checked>
+                        <i class="ti ti-box"></i>
+                        <span>Preset Model</span>
+                    </label>
+                    <label class="source-option" id="source-workshop" onclick="selectModelSource('workshop')">
+                        <input type="radio" name="model-source" value="workshop">
+                        <i class="ti ti-tools"></i>
+                        <span>From Studio</span>
+                    </label>
+                </div>
+
+                <div id="preset-selector">
+                    <h3>Model</h3>
+                    <select id="train-model" onchange="onModelSelect()">
+                        <option value="lenet5">LeNet-5 (MNIST)</option>
+                        <option value="mlp_baseline">MLP Baseline (MNIST)</option>
+                        <option value="resnet18">ResNet-18 Lite (MNIST)</option>
+                        <option value="vgg_lite">VGG-lite (CIFAR-10)</option>
+                        <option value="simple_transformer">Simple Transformer (WikiText-2)</option>
+                    </select>
+                    <div id="model-description" class="model-desc-box"></div>
+                </div>
+
+                <div id="workshop-selector" style="display:none">
+                    <div class="canvas-placeholder" style="text-align:center;padding:40px;color:var(--arena-text-3);border:1px dashed var(--arena-border);border-radius:12px;">
+                        <i class="ti ti-tools" style="font-size:48px;opacity:0.3"></i>
+                        <p style="margin-top:12px">Design your model in the Studio</p>
+                        <a href="/workshop" class="challenge-btn" style="display:inline-flex;margin-top:12px;">
+                            <i class="ti ti-arrow-right"></i> Open Studio
+                        </a>
+                    </div>
+                </div>
+
+                <h3>Dataset</h3>
+                <select id="train-dataset">
+                    <option value="mnist">MNIST (28x28, 10 classes)</option>
+                    <option value="fashion-mnist">Fashion-MNIST (28x28, 10 classes)</option>
+                    <option value="cifar10">CIFAR-10 (32x32, 10 classes)</option>
+                    <option value="cifar100">CIFAR-100 (32x32, 100 classes)</option>
+                    <option value="svhn">SVHN (32x32, 10 classes)</option>
+                    <option value="imagenet-tiny">Tiny ImageNet (64x64, 200 classes)</option>
+                </select>
+
+                <h3>Hyperparameters</h3>
+                <label>Learning Rate</label>
+                <input type="number" id="train-lr" value="0.001" step="0.0001" min="0.00001" max="1">
+                <label>Batch Size</label>
+                <input type="number" id="train-bs" value="64" step="16" min="8" max="512">
+                <label>Epochs</label>
+                <input type="number" id="train-epochs" value="5" min="1" max="200">
+                <label>Optimizer</label>
+                <select id="train-optim">
+                    <option value="Adam">Adam</option>
+                    <option value="SGD">SGD</option>
+                    <option value="AdamW">AdamW</option>
+                </select>
+
+                <button class="train-btn" id="train-btn" onclick="startTraining()">
+                    <i class="ti ti-player-play"></i> Start Training
+                </button>
+            </div>
+
+            <div class="train-monitor-area">
+                <div id="train-monitor" style="display:none">
+                    <div class="monitor-header">
+                        <span id="train-status">Preparing...</span>
+                        <span id="train-progress">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="live-loss-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="live-acc-chart"></canvas>
+                    </div>
+                    <div class="train-log" id="train-log"></div>
+                    <div id="train-result" style="display:none;margin-top:12px;padding:16px;border:1px solid var(--arena-primary);border-radius:12px;background:var(--arena-primary-bg);text-align:center">
+                        <div style="font-size:16px;font-weight:600;color:var(--arena-primary)">Training Complete!</div>
+                        <div id="train-result-detail" style="font-size:14px;margin-top:4px"></div>
+                    </div>
+                </div>
+
+                <div id="train-placeholder" class="train-placeholder">
+                    <i class="ti ti-rocket" style="font-size:64px;opacity:0.15"></i>
+                    <p style="color:var(--arena-text-3);margin-top:12px">Select a model and hyperparameters, then click Start Training</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!--  REPLAYS Panel                                               -->
+    <!-- ============================================================ -->
+    <section id="panel-replays" class="arena-panel" style="display:none">
+        <p class="panel-hint" style="color:var(--arena-text-2);margin-bottom:16px">
+            <i class="ti ti-info-circle"></i>
+            Click the play button on any leaderboard entry to view its training replay.
+        </p>
+        <div id="replay-container"></div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!--  ACHIEVEMENTS Panel                                          -->
+    <!-- ============================================================ -->
+    <section id="panel-achieve" class="arena-panel" style="display:none">
+        <p class="panel-hint" style="color:var(--arena-text-2);margin-bottom:16px">
+            <i class="ti ti-info-circle"></i>
+            Achievements unlock as you train and climb the leaderboard.
+        </p>
+        <div class="achieve-grid" id="achieve-grid"></div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!--  RANKINGS Panel                                              -->
+    <!-- ============================================================ -->
+    <section id="panel-rankings" class="arena-panel" style="display:none">
+        <div class="rankings-header">
+            <div class="rankings-tier-info" id="rankings-tier-info"></div>
+        </div>
+        <h3 style="font-size:15px;font-weight:500;margin-bottom:12px">All Players</h3>
+        <div class="rankings-table" id="rankings-table"></div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!--  SEASON Panel                                                -->
+    <!-- ============================================================ -->
+    <section id="panel-season" class="arena-panel" style="display:none">
+        <div class="season-header" id="season-header"></div>
+        <div class="season-controls">
+            <select id="season-ds-filter" onchange="loadSeasonLeaderboard()">
+                <option value="mnist">MNIST</option>
+                <option value="fashion-mnist">Fashion-MNIST</option>
+                <option value="cifar10">CIFAR-10</option>
+                <option value="cifar100">CIFAR-100</option>
+                <option value="svhn">SVHN</option>
+                <option value="imagenet-tiny">Tiny ImageNet</option>
+            </select>
+        </div>
+        <div class="lb-table">
+            <div class="lb-row lb-header">
+                <span class="lb-rank">#</span>
+                <span class="lb-player">Player</span>
+                <span class="lb-model">Model</span>
+                <span class="lb-acc">Accuracy</span>
+                <span class="lb-time">Time</span>
+                <span class="lb-hw">Hardware</span>
+                <span class="lb-action"></span>
+            </div>
+            <div id="season-lb-body"></div>
+        </div>
+    </section>
+</div>
+
+<script>
+// ============================================================
+//  Achievement Sound Effect (Web Audio API chime)
+// ============================================================
+let _audioCtx = null;
+function playAchievementSound() {
+    try {
+        if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Two-tone chime: C5 → E5 (major third, happy sound)
+        [523.25, 659.25, 783.99].forEach((freq, i) => {
+            const osc = _audioCtx.createOscillator();
+            const gain = _audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.15, _audioCtx.currentTime + i * 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + i * 0.1 + 0.4);
+            osc.connect(gain);
+            gain.connect(_audioCtx.destination);
+            osc.start(_audioCtx.currentTime + i * 0.1);
+            osc.stop(_audioCtx.currentTime + i * 0.1 + 0.4);
+        });
+    } catch(e) { /* audio not available */ }
+}
+
+// ============================================================
+//  Player Name
+// ============================================================
+function editPlayerName() {
+    const name = prompt("Enter your player name:", localStorage.getItem("arena_player") || "Anonymous");
+    if (name && name.trim()) {
+        localStorage.setItem("arena_player", name.trim());
+        document.getElementById("player-name").textContent = name.trim();
+        location.reload();
+    }
+}
+</script>
+<script src="/static/arena.js"></script>
+</body>
+</html>

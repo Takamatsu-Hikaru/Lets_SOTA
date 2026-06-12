@@ -1,0 +1,10 @@
+{
+  "name": "Simple Transformer",
+  "description": "2 层 GPTBlock Transformer 语言模型。Embedding → PositionalEncoding → GPTBlock×2 → LayerNorm → Linear。使用 WikiText-2 数据集",
+  "source": "Vaswani et al. 2017 (adapted)",
+  "paper_url": "https://arxiv.org/abs/1706.03762",
+  "dataset": "wikitext-2",
+  "expected_accuracy": "N/A (language model, measured by perplexity)",
+  "params": "~500K",
+  "layers": 6
+}

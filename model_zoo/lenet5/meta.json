@@ -1,0 +1,10 @@
+{
+  "name": "LeNet-5",
+  "description": "经典 CNN 架构，手写数字识别开山之作。2组 Conv+Pool → Flatten → 3x Dense。在 MNIST 上轻松达到 99%+",
+  "source": "LeCun et al. 1998",
+  "paper_url": "http://yann.lecun.com/exdb/publis/pdf/lecun-01a.pdf",
+  "dataset": "mnist",
+  "expected_accuracy": "99.0%+",
+  "params": "~60K",
+  "layers": 7
+}

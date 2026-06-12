@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  arena:
+    build: .
+    container_name: sota-arena
+    ports:
+      - "5000:5000"
+    volumes:
+      # 持久化数据库和回放
+      - arena-data:/app/data
+      # 挂载本地数据集缓存（避免每次重建下载）
+      - datasets-cache:/app/datasets
+      # 如果想实时改代码不重建
+      - ./arena:/app/arena
+      - ./static:/app/static
+      - ./templates:/app/templates
+    environment:
+      - FLASK_ENV=development
+      - ARENA_DB_PATH=/app/data/arena.db
+      - DATASET_ROOT=/app/datasets
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}
+    # GPU 支持（没有 GPU 的机器自动退化为 CPU）
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  arena-data:
+  datasets-cache:

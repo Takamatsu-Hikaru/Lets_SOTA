@@ -8,7 +8,7 @@ from dataclasses import dataclass, asdict, field
 from typing import Any, Dict, Optional, List
 from queue import Queue
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, redirect
 from flask_socketio import SocketIO, emit
 
 # 延迟导入以加快初次启动
@@ -25,6 +25,17 @@ from ml.code_generator import generate_pytorch_script, generate_inference_script
 from ml.data_loader import get_dataset
 from ml.visualization import plot_confusion_matrix, plot_predictions, plot_loss_curve
 
+# ── SOTA Arena imports ────────────────────────────────────────
+from arena.models import db
+from arena.leaderboard import leaderboard_bp
+from arena.achievements import seed_achievements
+from arena.datasets import seed_datasets
+from arena.hardware import detect_hardware, recommend_batch_size, get_device
+
+# 导入所有 Model 子类，确保 db.create_all() 创建它们的表
+import arena.season       # noqa: F401 — registers Season, SeasonSnapshot, SeasonBadge
+import arena.challenges   # noqa: F401 — registers DailyChallenge, ChallengeSubmission
+
 def print_progress_bar(current, total, prefix='', suffix='', length=50):
     """Simple progress bar for console output"""
     percent = current / total
@@ -37,6 +48,11 @@ def print_progress_bar(current, total, prefix='', suffix='', length=50):
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# ── SOTA Arena 数据库配置 ───────────────────────────────────────
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.environ.get('ARENA_DB_PATH', os.path.join(os.getcwd(), 'data', 'arena.db'))}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db.init_app(app)
 
 # 日志队列和处理器
 log_queue = Queue()
@@ -88,11 +104,6 @@ class TrainState:
 
 state = TrainState()
 state_lock = threading.Lock()
-
-
-@app.route("/")
-def index():
-    return render_template("index.html")
 
 
 @app.route("/api/save_graph", methods=["POST"])
@@ -604,6 +615,283 @@ def market_config():
     return jsonify({"url": MARKET_SERVER_URL})
 
 
+# ── SOTA Arena 路由 ─────────────────────────────────────────────
+
+# 注册蓝图
+app.register_blueprint(leaderboard_bp)
+
+
+# 硬件检测 API
+@app.route("/api/arena/hardware")
+def api_hardware():
+    profile = detect_hardware()
+    return json.dumps(profile.__dict__)
+
+
+# ── 主页面路由 ──────────────────────────────────────────────
+@app.route("/")
+def arena_page():
+    """Let's SOTA!!!!! — 主页（竞技面板）"""
+    return render_template("arena.html")
+
+
+@app.route("/workshop")
+def workshop_page():
+    """模型搭建工坊（LiteGraph 编辑器）"""
+    return render_template("workshop.html")
+
+
+@app.route("/arena")
+def arena_redirect():
+    return redirect("/")
+
+
+# 成就 API
+@app.route("/api/arena/achievements/<player_name>")
+def api_achievements(player_name):
+    from arena.models import Player, Achievement, PlayerAchievement
+    player = Player.query.filter_by(name=player_name).first()
+    unlocked = set()
+    if player:
+        unlocked = {
+            pa.achievement_id
+            for pa in PlayerAchievement.query.filter_by(player_id=player.id).all()
+        }
+    all_ach = Achievement.query.all()
+    return json.dumps({
+        "achievements": [
+            {
+                "id": a.id,
+                "name": a.name,
+                "description": a.description,
+                "icon": a.icon,
+                "category": a.category,
+                "rarity": a.rarity,
+            }
+            for a in all_ach
+        ],
+        "unlocked": list(unlocked),
+    }, ensure_ascii=False)
+
+
+# Model Zoo API
+ZOO_DIR = os.path.join(os.getcwd(), "model_zoo")
+
+@app.route("/api/zoo")
+def api_zoo_list():
+    try:
+        models = []
+        p = os.path.join(ZOO_DIR, "registry.json")
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                models = json.load(f)
+        return jsonify(models)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/zoo/<model_id>")
+def api_zoo_detail(model_id):
+    try:
+        graph_path = os.path.join(ZOO_DIR, model_id, "graph.json")
+        meta_path = os.path.join(ZOO_DIR, model_id, "meta.json")
+        result = {}
+        if os.path.exists(meta_path):
+            with open(meta_path, "r", encoding="utf-8") as f:
+                result["meta"] = json.load(f)
+        if os.path.exists(graph_path):
+            with open(graph_path, "r", encoding="utf-8") as f:
+                result["graph"] = json.load(f)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
+
+
+# ── Season API ────────────────────────────────────────────────────
+@app.route("/api/arena/season")
+def api_season():
+    from arena.season import get_or_create_current_season, Season, SeasonBadge
+    season = get_or_create_current_season()
+    badges = SeasonBadge.query.all()
+    return json.dumps({
+        "id": season.id,
+        "name": season.name,
+        "slug": season.slug,
+        "started_at": season.started_at.isoformat() if season.started_at else "",
+        "is_active": season.is_active,
+        "total_badges_awarded": len(badges),
+    }, ensure_ascii=False)
+
+
+@app.route("/api/arena/season/leaderboard")
+def api_season_leaderboard():
+    """赛季排行榜（仅展示本赛季提交）"""
+    from arena.models import TrainingRun, Player
+    from arena.season import get_or_create_current_season
+    from sqlalchemy import desc
+
+    season = get_or_create_current_season()
+    dataset = request.args.get("dataset", "mnist")
+    limit = min(int(request.args.get("limit", 20)), 100)
+
+    runs = (
+        TrainingRun.query
+        .join(Player)
+        .filter(TrainingRun.dataset_id == dataset)
+        .filter(TrainingRun.final_accuracy.isnot(None))
+        .filter(TrainingRun.finished_at >= season.started_at)
+        .order_by(desc(TrainingRun.best_accuracy))
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for i, run in enumerate(runs, 1):
+        player = Player.query.get(run.player_id)
+        results.append({
+            "rank": i,
+            "player_name": player.name if player else "Unknown",
+            "model_name": run.model_name,
+            "accuracy": round(run.best_accuracy, 4) if run.best_accuracy else 0,
+            "duration": run.train_duration_seconds,
+            "hardware_tier": run.hardware_tier,
+            "submitted_at": run.finished_at.isoformat() if run.finished_at else "",
+            "season_name": season.name,
+        })
+    return json.dumps({"leaderboard": results, "season": season.name})
+
+
+@app.route("/api/arena/player/<player_name>/badges")
+def api_player_badges(player_name):
+    from arena.models import Player
+    from arena.season import get_player_season_badges
+    player = Player.query.filter_by(name=player_name).first()
+    if not player:
+        return json.dumps({"badges": []})
+    badges = get_player_season_badges(player.id)
+    return json.dumps({"badges": badges})
+
+
+# ── Daily Challenge API ──────────────────────────────────────────
+@app.route("/api/arena/challenge")
+def api_challenge():
+    from arena.challenges import get_today_challenge, DailyChallenge
+    challenge = get_today_challenge()
+    if not challenge:
+        return json.dumps({"error": "No challenge today"})
+
+    # 解析约束
+    try:
+        constraints = json.loads(challenge.constraints) if isinstance(challenge.constraints, str) else challenge.constraints
+    except Exception:
+        constraints = {}
+
+    return json.dumps({
+        "id": challenge.id,
+        "date": challenge.date.isoformat() if challenge.date else "",
+        "title": challenge.title,
+        "description": challenge.description,
+        "constraints": constraints,
+        "target_dataset": challenge.target_dataset,
+        "target_metric": challenge.target_metric,
+        "target_threshold": challenge.target_threshold,
+    }, ensure_ascii=False)
+
+
+# ── Player Ranking API ───────────────────────────────────────────
+@app.route("/api/arena/rankings")
+def api_rankings():
+    """获取所有玩家排名"""
+    from arena.models import Player
+    from arena.ranking import get_rank_tier
+    from sqlalchemy import desc
+
+    players = Player.query.order_by(desc(Player.best_accuracy)).all()
+    rankings = []
+    for i, p in enumerate(players, 1):
+        tier = get_rank_tier(p.best_accuracy or 0)
+        rankings.append({
+            "rank": i,
+            "player_name": p.name,
+            "best_accuracy": p.best_accuracy,
+            "total_runs": p.total_runs,
+            "tier": tier["id"],
+            "tier_name": tier["name"],
+            "tier_icon": tier["icon"],
+            "tier_color": tier["color"],
+        })
+    return json.dumps(rankings, ensure_ascii=False)
+
+
+@app.route("/api/arena/player/<player_name>/rank")
+def api_player_rank(player_name):
+    from arena.models import Player
+    from arena.ranking import get_player_rank_info
+    player = Player.query.filter_by(name=player_name).first()
+    if not player:
+        return json.dumps({"error": "Player not found"})
+    info = get_player_rank_info(player)
+    return json.dumps(info, ensure_ascii=False)
+
+
+# ── Arena Training API ───────────────────────────────────────────
+from arena.train import arena_trainer
+
+
+@app.route("/api/arena/train", methods=["POST"])
+def api_arena_train():
+    data = request.json
+    result = arena_trainer.start_training(
+        params=data,
+    )
+    return jsonify(result)
+
+
+@app.route("/api/arena/train/progress")
+def api_arena_train_progress():
+    """获取当前训练进度"""
+    progress = arena_trainer.get_progress()
+    return jsonify(progress)
+
+
+@app.route("/api/arena/train/result")
+def api_arena_train_result():
+    """获取最近完成的训练结果"""
+    result = arena_trainer.get_result()
+    return jsonify(result if result else {"status": "no_result"})
+
+
+@app.route("/api/arena/debug")
+def api_debug():
+    """Debug: test model creation in process"""
+    import torch
+    import torch.nn as nn
+    try:
+        model = nn.Sequential(
+            nn.Conv2d(1, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+            nn.AdaptiveAvgPool2d((4, 4)), nn.Flatten(),
+            nn.Linear(64 * 4 * 4, 128), nn.ReLU(), nn.Linear(128, 10),
+        )
+        params = sum(p.numel() for p in model.parameters())
+        opt = torch.optim.Adam(model.parameters(), lr=0.001)
+        return jsonify({"params": int(params), "optimizer": str(type(opt).__name__), "success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# 初始化 Arena 数据库
+def init_arena_db():
+    """在应用上下文中初始化数据库和种子数据"""
+    with app.app_context():
+        db.create_all()
+        seed_datasets()
+        seed_achievements()
+        from arena.season import get_or_create_current_season
+        season = get_or_create_current_season()
+        print(f"  [OK] SOTA Arena database initialized")
+        print(f"  [Season] Active season: {season.name}")
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     # 在训练过程中禁用调试模式以避免文件变化导致的自动重启
@@ -623,13 +911,18 @@ if __name__ == "__main__":
         
         werkzeug.serving._is_changed = patched_is_changed
     
+    # 初始化 Arena 数据库
+    init_arena_db()
+
     url = f"http://localhost:{port}"
     print(f"""
-  ╔══════════════════════════════════════════╗
-  ║          CortexNodus Workbench           ║
-  ║──────────────────────────────────────────║
-  ║  {url:<40s}║
-  ╚══════════════════════════════════════════╝
+  +--------------------------------------------+
+  |         Let's SOTA!!!!!                     |
+  |         AI Model Arena                      |
+  +--------------------------------------------+
+  |  Main  : {url:<39s}|
+  |  Studio: {url + '/workshop':<38s}|
+  +--------------------------------------------+
   Press Ctrl+C to quit.
 """)
-    socketio.run(app, host="0.0.0.0", port=port, debug=debug_mode)
+    socketio.run(app, host="0.0.0.0", port=port, debug=debug_mode, allow_unsafe_werkzeug=True)

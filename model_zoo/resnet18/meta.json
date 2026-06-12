@@ -1,0 +1,10 @@
+{
+  "name": "ResNet-18 Lite",
+  "description": "残差连接网络简化版。Conv → BN → ReLU → Conv → BN → Add(skip) → ReLU → Pool → Flatten → Dense。演示残差连接（Add节点）的用法",
+  "source": "He et al. 2015",
+  "paper_url": "https://arxiv.org/abs/1512.03385",
+  "dataset": "mnist",
+  "expected_accuracy": "99%+",
+  "params": "~500K",
+  "layers": 6
+}

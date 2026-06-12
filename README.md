@@ -1,202 +1,182 @@
-# CortexNodus
+# Let's SOTA!!!!!
 
-一个基于 Flask + LiteGraph.js 的可视化 AI 训练工作台，支持通过拖拽方式构建神经网络架构并生成 PyTorch 训练代码。
+> AI模型竞技训练平台 — 拖拽搭建神经网络，刷SOTA，实时排行榜，成就系统，一键部署
 
-## 🌟 主要特性
+![Python](https://img.shields.io/badge/python-3.8+-blue) ![Flask](https://img.shields.io/badge/flask-3.0+-black) ![PyTorch](https://img.shields.io/badge/pytorch-2.3+-red) ![License](https://img.shields.io/badge/license-GPL--3.0-green)
 
-### 可视化模型设计
-- **拖拽式界面**：基于 LiteGraph.js 的直观节点编辑器
-- **可视化连接**：节点间可视化连接
-- **形状推断**：自动计算和显示张量维度变化
-- **子图支持**：创建可重用的模块化组件
+---
 
-### 丰富的神经网络层支持
-- **基础层**：Conv2D, Linear, MaxPool2D, AvgPool2D, Flatten, Dropout
-- **激活函数**：ReLU, GELU, Sigmoid, Tanh, Softmax
-- **归一化层**：BatchNorm2D, LayerNorm
-- **嵌入层**：Embedding
-- **Transformer 组件**：MultiHeadAttention, GPTBlock, TransformerEncoder
-- **损失函数**：CrossEntropyLoss, MSELoss
-- **优化器**：Adam, SGD
+## 🎯 核心循环
 
-### 代码生成与训练
-- **PyTorch 代码生成**：生成完整的训练脚本
-- **实时训练监控**：通过 WebSocket 实时显示训练状态
-- **训练可视化**：损失曲线、混淆矩阵、预测结果图表
-- **推理应用导出**：生成独立的推理应用
+```
+设计模型 → 选数据集 → 训练 → 提交分数 → 排行榜 → 优化 → 再来！
+```
 
-### 数据处理
-- **内置数据集**：内置对 MNIST 手写数字数据集等数据集的支持
-- **数据加载器**：自动处理数据预处理和批次管理
-- **自定义数据**：支持上传自定义数据集
+Kaggle的竞技性 + Scratch的拖拽体验 + 游戏化的成就/称号系统
+
+---
 
 ## 🚀 快速开始
 
 ### 环境要求
 - Python 3.8+
-- PyTorch
-- Flask
-- 其他依赖见 requirements.txt
+- PyTorch (CPU或GPU均可)
+- pip
 
-### 安装步骤
+### 安装 & 启动
 
-1. **克隆项目**
 ```bash
-git clone https://github.com/streetartist/CortexNodus.git
-cd CortexNodus
-```
+git clone https://github.com/Takamatsu-Hikaru/Lets_SOTA.git
+cd Lets_SOTA
 
-2. **安装依赖**
-```bash
 pip install -r requirements.txt
-```
-
-3. **启动应用**
-```bash
 python app.py
 ```
 
-4. **访问界面**
-打开浏览器访问 `http://localhost:5000`
+打开浏览器访问：
+- **http://localhost:5000** — Arena 竞技主页
+- **http://localhost:5000/workshop** — Studio 模型搭建工坊
 
-## 📖 使用指南
+### Docker 启动
 
-### 基本工作流程
+```bash
+docker compose up --build
+```
 
-1. **设计模型架构**
-   - 从右侧面板选择神经网络层
-   - 拖拽节点到画布
-   - 连接节点构建数据流
+---
 
-2. **配置参数**
-   - 点击节点设置层参数
+## 🎮 功能模块
 
-3. **生成代码 （可选）**
-   - 点击"生成代码"按钮
-   - 系统生成完整的 PyTorch 训练脚本
+### 🏆 Arena（竞技面板）
+- 排行榜 — 6个数据集 × 4个硬件分组 × 3个排名指标
+- 训练面板 — 选预置模型或Studio自定义图 → 填超参 → 一键训练 → 自动提交
+- 回放系统 — 查看任意历史的训练曲线和代码
 
-4. **训练模型**
-   - 点击"开始训练"
-   - 实时监控训练进度和指标
+### ⭐ 成就系统
+20个成就，分6类：里程碑/精度/速度/多样性/竞争/架构/隐藏
+- Legendary: SOTA Breaker, Dethroned
+- Epic: 99% Club, Speedrunner, Minimalist
+- 解锁时带 **金属合体音效** + 弹窗动画
 
-5. **查看结果**
-   - 训练完成后自动显示可视化结果
-   - 包括损失曲线、混淆矩阵等
+### 🥇 段位排名
+```
+Bronze (0%) → Silver (90%) → Gold (95%) → Platinum (98%) → Diamond (99%) → SOTA Champion (99.5%+)
+```
+全局ELO排名 + 硬件效率分数
 
-### 支持的节点类型
+### 📅 赛季系统
+30天一个赛季，季末快照 + 徽章颁发 + 新赛季自动开始
 
-#### 数据层
-- **Input**: 输入数据节点
-- **Target**: 目标标签节点
+### 🔥 每日挑战
+8种随机约束挑战（"3层以内"、"batch size=8"、"不用卷积"等），每日自动刷新
 
-#### 神经网络层
-- **Conv2D**: 二维卷积层
-- **Linear**: 全连接层
-- **MaxPool2D**: 二维最大池化
-- **AvgPool2D**: 二维平均池化
-- **Flatten**: 数据展平层
-- **Dropout**: 随机失活层
-- **BatchNorm2D**: 二维批归一化
-- **LayerNorm**: 层归一化
-- **Embedding**: 嵌入层
+### 🤖 Studio 新手教程
+画布上的**动态阴影拼图**教学：
+1. LeNet-5 — 经典MNIST分类器
+2. CNN — BatchNorm卷积网络
+3. ResNet — 残差跳跃连接
+- 阴影引导 → 拖拽节点 → 自动吸附 → 🔊合体音效
+- 30秒无操作弹出 `[Auto]` 一键补全
 
-#### 激活函数
-- **ReLU**: ReLU 激活函数
-- **GELU**: GELU 激活函数
-- **Sigmoid**: Sigmoid 激活函数
-- **Tanh**: Tanh 激活函数
-- **Softmax**: Softmax 激活函数
+---
 
-#### Transformer 组件
-- **MultiHeadAttention**: 多头注意力机制
-- **GPTBlock**: GPT 风格的 Transformer 块
-- **TransformerEncoder**: Transformer 编码器
+## 🧱 预置模型 (Model Zoo)
 
-#### 输出层
-- **CrossEntropyLoss**: 交叉熵损失函数
-- **MSELoss**: 均方误差损失函数
+| 模型 | 数据集 | 参数量 | 亮点 |
+|------|--------|--------|------|
+| LeNet-5 | MNIST | 60K | 经典CNN入门 |
+| MLP Baseline | MNIST | 100K | 纯全连接基线 |
+| ResNet-18 Lite | MNIST | ~500K | 残差连接 (Add节点) |
+| VGG-lite | CIFAR-10 | 2M | VGG简化版 |
+| Simple Transformer | WikiText-2 | ~500K | GPTBlock×2 |
 
-## 🔧 高级功能
+---
 
-### 子图系统
-- 创建可重用的模块化组件
-- 将复杂网络封装为单个节点
-- 支持子图的导入和导出
+## 🛠️ Tech Stack
 
-### 实时训练监控
-- WebSocket 实时连接
-- 动态更新训练状态
-- 实时显示损失值和准确率
+| 层 | 技术 |
+|----|------|
+| 前端 | LiteGraph.js + Chart.js + Tabler Icons |
+| 后端 | Flask + Flask-SocketIO + Flask-SQLAlchemy |
+| AI | PyTorch + torchvision |
+| 数据库 | SQLite |
+| 部署 | Docker + docker-compose |
 
-### 代码导出
-- 生成独立的 Python 训练脚本
-- 支持推理应用导出
-- 包含完整的模型定义和训练逻辑
+---
 
 ## 📁 项目结构
 
 ```
-CortexNodus/
-├── app.py                 # Flask 主应用
-├── ml/                    # 机器学习核心模块
-│   ├── designer.py        # 节点注册和模型构建
-│   ├── code_generator.py  # PyTorch 代码生成
-│   ├── data_loader.py     # 数据加载和处理
+Lets_SOTA/
+├── app.py                 # Flask 主路由
+├── arena/                 # 竞技系统后端
+│   ├── models.py          # SQLAlchemy 数据模型 (7 tables)
+│   ├── leaderboard.py     # 排行榜 API Blueprint
+│   ├── achievements.py    # 20个成就 + 自动检查
+│   ├── season.py          # 赛季系统
+│   ├── challenges.py      # 每日挑战
+│   ├── ranking.py         # ELO段位 + 效率分数
+│   ├── train.py           # ArenaTrainer 训练桥接
+│   ├── datasets.py        # 数据集注册 (6 datasets)
+│   └── replay.py          # 训练回放
+├── ml/                    # 机器学习引擎 (基于CortexNodus)
+│   ├── designer.py        # LiteGraph节点注册 + 模型构建
+│   ├── code_generator.py  # PyTorch代码生成
+│   ├── data_loader.py     # 数据加载器
 │   └── visualization.py   # 训练可视化
-├── static/                # 静态资源
-│   ├── designer.js        # 前端节点编辑器
-│   ├── style.css          # 样式文件
-│   └── plots/             # 生成的图表
-├── templates/             # HTML 模板
-├── example/               # 示例配置
-├── subgraphs/             # 子图定义
-├── docs/                  # 文档
-└── test/                  # 测试文件
+├── templates/
+│   ├── arena.html         # Let's SOTA!!!!! 主页
+│   └── workshop.html      # Studio 模型搭建 + Tutorial
+├── static/
+│   ├── arena.css          # 紫色主题样式
+│   ├── arena.js           # 竞技前端逻辑
+│   ├── designer.js        # LiteGraph 编辑器
+│   ├── tutorial.css       # 教程系统样式
+│   ├── tutorial.js        # 阴影拼图教程引擎
+│   └── sounds/
+│       └── transformup.mp3 # 金属合体音效
+├── model_zoo/             # 预置模型库
+│   ├── registry.json
+│   ├── lenet5/            # graph.json + meta.json
+│   ├── mlp_baseline/
+│   ├── resnet18/
+│   ├── vgg_lite/
+│   └── simple_transformer/
+├── docker-compose.yml
+├── Dockerfile
+└── requirements.txt
 ```
 
-## 🎯 示例项目
+---
 
-### CNN MNIST 分类器
-1. 创建 Input 节点 (1, 28, 28)
-2. 添加 Conv2D → ReLU → MaxPool2D
-3. 重复卷积块
-4. 添加 Flatten → Linear → CrossEntropyLoss
-5. 连接 Target 节点
-6. 生成代码并开始训练
+## 🔬 示例
 
-### Transformer 模型
-1. 使用 Embedding 层处理输入
-2. 添加 MultiHeadAttention 层
-3. 使用 GPTBlock 构建 Transformer 块
-4. 添加输出层和损失函数
+### 训练一个 LeNet-5 在 MNIST 上：
 
-## 🤝 贡献指南
+1. 打开 Arena → Train Tab
+2. 选 Preset Model: LeNet-5
+3. 数据集自动切到 MNIST
+4. 点 **Start Training**
+5. 训练曲线实时更新 → 完成自动提交排行榜 → 解锁成就
 
-欢迎提交 Issue 和 Pull Request！
+### Studio 手动设计模型：
 
-### 开发环境设置
-1. Fork 项目
-2. 创建功能分支
-3. 提交更改
-4. 发起 Pull Request
-
-## 📄 许可证
-
-本项目采用 GPL-3.0 许可证 - 详见 [LICENSE](LICENSE) 文件
-
-## 🔗 相关链接
-
-- [LiteGraph.js](https://github.com/jagenjo/litegraph.js) - 可视化节点编辑器
-- [PyTorch](https://pytorch.org/) - 深度学习框架
-- [Flask](https://flask.palletsprojects.com/) - Web 框架
-
-## 📝 更新日志
-
-### v0.4.1
-- 初始版本发布
-- 基础可视化模型设计功能
-- PyTorch 代码生成
-- 实时训练监控
-- 子图系统支持
+1. 打开 `/workshop`
+2. 点 **Tutorial** 选 LeNet-5 入门
+3. 跟着阴影拼图搭建
+4. 搭好后回到 Arena → Train → From Studio → 开始训练
 
 ---
+
+## 📄 致谢
+
+- 基于 [CortexNodus](https://github.com/streetartist/CortexNodus) by Wen Jiaxian (UESTC)
+- [LiteGraph.js](https://github.com/jagenjo/litegraph.js)
+- [PyTorch](https://pytorch.org/)
+- 音效: Bluezone Corporation (free license)
+
+---
+
+## 📝 License
+
+GPL-3.0 — 详见 [LICENSE](LICENSE)

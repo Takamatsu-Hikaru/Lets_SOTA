@@ -1,0 +1,10 @@
+{
+  "name": "VGG-lite",
+  "description": "VGG 简化版，适合小数据集。2x(Conv+Conv+Pool) → Flatten → Dense。适合 CIFAR-10，预计 70-80% accuracy",
+  "source": "Simonyan & Zisserman 2014 (adapted)",
+  "paper_url": "https://arxiv.org/abs/1409.1556",
+  "dataset": "cifar10",
+  "expected_accuracy": "70-85%",
+  "params": "~2M",
+  "layers": 8
+}

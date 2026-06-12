@@ -1,0 +1,42 @@
+[
+  {
+    "id": "lenet5",
+    "name": "LeNet-5",
+    "description": "经典 CNN，手写数字识别开山之作。2 组 Conv+Pool → Flatten → 2x Linear",
+    "layers": 5,
+    "params": "60K",
+    "source": "LeCun 1998"
+  },
+  {
+    "id": "resnet18",
+    "name": "ResNet-18",
+    "description": "残差连接网络，深度学习里程碑。4 个残差阶段 + global avg pooling",
+    "layers": 18,
+    "params": "11M",
+    "source": "He et al. 2015"
+  },
+  {
+    "id": "vgg_lite",
+    "name": "VGG-lite",
+    "description": "VGG 简化版，适合小数据集。3 层 Conv + 2 层 Linear",
+    "layers": 8,
+    "params": "2M",
+    "source": "Adapted from Simonyan 2014"
+  },
+  {
+    "id": "mlp_baseline",
+    "name": "MLP Baseline",
+    "description": "纯全连接网络基线。Flatten → Linear(256) → ReLU → Linear(128) → Output",
+    "layers": 3,
+    "params": "100K",
+    "source": "Baseline"
+  },
+  {
+    "id": "simple_transformer",
+    "name": "Simple Transformer",
+    "description": "2 层 Transformer encoder + cls head，适合序列分类",
+    "layers": 6,
+    "params": "500K",
+    "source": "Vaswani 2017 adapted"
+  }
+]
